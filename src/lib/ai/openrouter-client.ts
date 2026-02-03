@@ -3,6 +3,45 @@ import { ChatCompletionRequest, ChatCompletionResponse, ChatMessage, OpenRouterT
 
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 
+// Convert technical errors to user-friendly messages
+function getUserFriendlyError(error: Error & { status?: number; code?: string }, provider: string): string {
+  const message = error.message?.toLowerCase() || '';
+  const status = error.status;
+
+  // API key issues
+  if (status === 401 || message.includes('api key') || message.includes('unauthorized') || message.includes('authentication')) {
+    return "We're having trouble connecting to our AI service. Our team has been notified and is working on it. Please try again in a few minutes.";
+  }
+
+  // Rate limiting
+  if (status === 429 || message.includes('rate limit') || message.includes('too many requests')) {
+    return "Our AI is experiencing high demand right now. Please wait a moment and try again.";
+  }
+
+  // Quota/billing issues
+  if (message.includes('quota') || message.includes('billing') || message.includes('insufficient')) {
+    return "We're experiencing a temporary service issue. Our team has been notified. Please try again later.";
+  }
+
+  // Network/timeout issues
+  if (message.includes('timeout') || message.includes('network') || message.includes('econnrefused')) {
+    return "Unable to connect to our AI service. Please check your internet connection and try again.";
+  }
+
+  // Model not available
+  if (message.includes('model') && (message.includes('not found') || message.includes('does not exist'))) {
+    return "The AI service is temporarily unavailable. Please try again in a moment.";
+  }
+
+  // Server errors
+  if (status && status >= 500) {
+    return "Our AI service is temporarily down. Please try again in a few minutes.";
+  }
+
+  // Generic fallback
+  return "Something went wrong with the analysis. Please try again. If the problem persists, try again later.";
+}
+
 // Model configurations for different task types
 // OpenRouter: uses prefixed names (anthropic/claude-3.7-sonnet)
 // OpenAI direct API: uses unprefixed names (gpt-4o)
@@ -235,11 +274,13 @@ export async function chatCompletion(
       if (err.response?.data) {
         console.error('[AI] OpenAI error response:', JSON.stringify(err.response.data));
       }
-      throw new Error(`All AI providers failed. OpenRouter: ${openRouterConfig ? 'configured but failed' : 'not configured'}. OpenAI: failed with ${err.message}`);
+      // Create user-friendly error message
+      const userMessage = getUserFriendlyError(err, 'OpenAI');
+      throw new Error(userMessage);
     }
   }
 
-  throw new Error('No AI provider configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY.');
+  throw new Error("We're having trouble connecting to our AI service. Please try again later.");
 }
 
 // Legacy function for backwards compatibility
@@ -288,7 +329,7 @@ export async function* streamChatCompletion(
   }
 
   if (!client) {
-    throw new Error('No AI provider configured');
+    throw new Error("We're having trouble connecting to our AI service. Please try again later.");
   }
 
   const stream = await client.chat.completions.create({
