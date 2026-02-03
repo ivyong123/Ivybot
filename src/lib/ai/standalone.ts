@@ -12,6 +12,9 @@ import {
   getInstitutionalHoldings,
   getFinnhubEarnings,
   getFinnhubRecommendations,
+  getForexHistoricalData,
+  getForexIndicator,
+  getForexQuote,
 } from '@/lib/providers';
 import { StandaloneType } from '@/types/analysis';
 import { ChatMessage } from '@/types/ai';
@@ -25,13 +28,60 @@ export interface StandaloneResult {
   generated_at: string;
 }
 
-// Technical Analysis - OHLCV + AI summary
+// Helper to detect if symbol is a forex pair
+function isForexPair(symbol: string): boolean {
+  // Check if it contains "/" (e.g., "EUR/USD")
+  if (symbol.includes('/')) return true;
+
+  // Check if it's a 6-letter currency pair (e.g., "EURUSD", "GBPUSD")
+  const forexPairs = ['EUR', 'USD', 'GBP', 'JPY', 'AUD', 'NZD', 'CAD', 'CHF'];
+  const upper = symbol.toUpperCase();
+  if (upper.length === 6) {
+    const base = upper.slice(0, 3);
+    const quote = upper.slice(3);
+    return forexPairs.includes(base) && forexPairs.includes(quote);
+  }
+
+  return false;
+}
+
+// Format forex pair for TwelveData (e.g., "EURUSD" -> "EUR/USD")
+function formatForexPair(symbol: string): string {
+  if (symbol.includes('/')) return symbol.toUpperCase();
+  return `${symbol.slice(0, 3).toUpperCase()}/${symbol.slice(3).toUpperCase()}`;
+}
+
+// Technical Analysis - OHLCV + AI summary (supports both stocks and forex)
 async function runTechnicalAnalysis(symbol: string): Promise<StandaloneResult> {
   const upperSymbol = symbol.toUpperCase();
+  const isForex = isForexPair(upperSymbol);
 
   try {
-    // Fetch historical data (30 days)
-    const candles = await getHistoricalData(upperSymbol, '1m', '1day');
+    let candles;
+    let currentPrice: number;
+
+    if (isForex) {
+      // Use TwelveData for forex
+      const forexPair = formatForexPair(upperSymbol);
+      candles = await getForexHistoricalData(forexPair, '1day', 50);
+
+      // Get current price from quote
+      try {
+        const quote = await getForexQuote(forexPair);
+        currentPrice = quote.mid;
+      } catch {
+        // Fallback to last candle close
+        currentPrice = candles[candles.length - 1]?.close || 0;
+      }
+    } else {
+      // Use Polygon for stocks
+      candles = await getHistoricalData(upperSymbol, '1m', '1day');
+      currentPrice = candles[candles.length - 1]?.close || 0;
+    }
+
+    if (!candles || candles.length === 0) {
+      throw new Error('No historical data available');
+    }
 
     // Calculate basic technical indicators
     const closes = candles.map(c => c.close);
@@ -51,21 +101,23 @@ async function runTechnicalAnalysis(symbol: string): Promise<StandaloneResult> {
     const resistance = Math.max(...recentHighs);
     const support = Math.min(...recentLows);
 
-    // Current price
-    const currentPrice = closes[closes.length - 1];
-
     // MACD
     const macd = calculateMACD(closes);
 
+    // Format prices appropriately for forex vs stocks
+    const priceDecimals = isForex ? (upperSymbol.includes('JPY') ? 3 : 5) : 2;
+    const formatPrice = (p: number) => Number(p.toFixed(priceDecimals));
+
     const technicalData = {
-      symbol: upperSymbol,
-      current_price: currentPrice,
-      rsi_14: rsi,
-      sma_20: sma20,
-      sma_50: sma50,
+      symbol: isForex ? formatForexPair(upperSymbol) : upperSymbol,
+      asset_type: isForex ? 'forex' : 'stock',
+      current_price: formatPrice(currentPrice),
+      rsi_14: Math.round(rsi * 100) / 100,
+      sma_20: formatPrice(sma20),
+      sma_50: formatPrice(sma50),
       macd: macd,
-      support_level: support,
-      resistance_level: resistance,
+      support_level: formatPrice(support),
+      resistance_level: formatPrice(resistance),
       price_vs_sma20: currentPrice > sma20 ? 'above' : 'below',
       price_vs_sma50: currentPrice > sma50 ? 'above' : 'below',
       trend: currentPrice > sma20 && sma20 > sma50 ? 'uptrend' : currentPrice < sma20 && sma20 < sma50 ? 'downtrend' : 'sideways',
@@ -73,10 +125,11 @@ async function runTechnicalAnalysis(symbol: string): Promise<StandaloneResult> {
     };
 
     // Get AI summary
-    const summary = await getAISummary('technical', upperSymbol, technicalData);
+    const displaySymbol = isForex ? formatForexPair(upperSymbol) : upperSymbol;
+    const summary = await getAISummary('technical', displaySymbol, technicalData);
 
     return {
-      symbol: upperSymbol,
+      symbol: displaySymbol,
       type: 'technical',
       data: technicalData,
       summary,
@@ -84,8 +137,9 @@ async function runTechnicalAnalysis(symbol: string): Promise<StandaloneResult> {
     };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+    const displaySymbol = isForex ? formatForexPair(upperSymbol) : upperSymbol;
     return {
-      symbol: upperSymbol,
+      symbol: displaySymbol,
       type: 'technical',
       data: {},
       summary: `Failed to fetch technical data: ${errorMsg}`,
