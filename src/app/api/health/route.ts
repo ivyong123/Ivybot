@@ -11,7 +11,7 @@ export async function GET() {
     },
   };
 
-  // Check database connection
+  // Check database connection (non-blocking for health status)
   try {
     const supabase = createAdminClient();
     const { error } = await supabase.from('trading_analysis_jobs').select('id').limit(1);
@@ -20,11 +20,10 @@ export async function GET() {
     health.checks.database = false;
   }
 
-  // Determine overall status
+  // API is healthy as long as it can respond - database is optional
   const allChecksPass = Object.values(health.checks).every(Boolean);
   health.status = allChecksPass ? 'healthy' : 'degraded';
 
-  const statusCode = allChecksPass ? 200 : 503;
-
-  return NextResponse.json(health, { status: statusCode });
+  // Always return 200 for Railway healthcheck - app is running
+  return NextResponse.json(health, { status: 200 });
 }
