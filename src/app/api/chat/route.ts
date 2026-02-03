@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { chatCompletion } from '@/lib/ai/openrouter-client';
 import { searchKnowledgeBase, formatContextForPrompt } from '@/lib/rag';
-import { ChatMessage } from '@/types/ai';
+import { executeToolCalls } from '@/lib/ai/executor';
+import { ChatMessage, OpenRouterTool, ToolCallRequest } from '@/types/ai';
 import { z } from 'zod';
 
 const ChatRequestSchema = z.object({
@@ -12,8 +13,181 @@ const ChatRequestSchema = z.object({
   kb_type: z.enum(['stock', 'forex']).optional().default('stock'),
 });
 
-// Simple web search function using a search API
-async function searchWeb(query: string): Promise<string> {
+// Chat-specific tools - a subset of analysis tools for conversational use
+const CHAT_TOOLS: OpenRouterTool[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'get_stock_price',
+      description: 'Get the current stock price, daily change, and volume for a given ticker symbol. Use this when the user asks about a stock price.',
+      parameters: {
+        type: 'object',
+        properties: {
+          symbol: {
+            type: 'string',
+            description: 'The stock ticker symbol (e.g., AAPL, MSFT, TSLA)',
+          },
+        },
+        required: ['symbol'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_forex_quote',
+      description: 'Get real-time forex quote with bid/ask prices for a currency pair. Use this when the user asks about forex rates.',
+      parameters: {
+        type: 'object',
+        properties: {
+          pair: {
+            type: 'string',
+            description: 'The forex pair (e.g., EUR/USD, GBP/JPY, USD/CAD)',
+          },
+        },
+        required: ['pair'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_news_sentiment',
+      description: 'Get recent news articles and sentiment analysis for a stock. Use this when the user asks about news or sentiment.',
+      parameters: {
+        type: 'object',
+        properties: {
+          symbol: {
+            type: 'string',
+            description: 'The stock ticker symbol',
+          },
+          days: {
+            type: 'number',
+            description: 'Number of days of news to analyze (default: 7)',
+            default: 7,
+          },
+        },
+        required: ['symbol'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_historical_data',
+      description: 'Get historical OHLCV data for technical analysis. Use this when the user asks about price history or trends.',
+      parameters: {
+        type: 'object',
+        properties: {
+          symbol: {
+            type: 'string',
+            description: 'The stock ticker symbol',
+          },
+          timeframe: {
+            type: 'string',
+            enum: ['1d', '1w', '1m', '3m', '6m', '1y'],
+            description: 'Time period for historical data',
+          },
+        },
+        required: ['symbol', 'timeframe'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_earnings_calendar',
+      description: 'Get upcoming and recent earnings dates with estimates and actuals. Use this when the user asks about earnings.',
+      parameters: {
+        type: 'object',
+        properties: {
+          symbol: {
+            type: 'string',
+            description: 'The stock ticker symbol',
+          },
+        },
+        required: ['symbol'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_analyst_ratings',
+      description: 'Get analyst ratings, price targets, and consensus recommendation. Use this when the user asks about analyst opinions.',
+      parameters: {
+        type: 'object',
+        properties: {
+          symbol: {
+            type: 'string',
+            description: 'The stock ticker symbol',
+          },
+        },
+        required: ['symbol'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_trading_knowledge',
+      description: 'Search the trading knowledge base for strategies, patterns, and educational content. Use this to answer trading education questions.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'The search query for the knowledge base',
+          },
+          kb_type: {
+            type: 'string',
+            enum: ['stock', 'forex'],
+            description: 'Which knowledge base to search',
+            default: 'stock',
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'web_search',
+      description: 'Search the web for current market news, events, or general information. Use this for recent news, current events, or information not in the knowledge base.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'The search query',
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_economic_calendar',
+      description: 'Get economic calendar events that could impact a currency pair. Use this for forex-related economic events.',
+      parameters: {
+        type: 'object',
+        properties: {
+          pair: {
+            type: 'string',
+            description: 'The forex pair (e.g., EUR/USD, GBP/JPY)',
+          },
+        },
+        required: ['pair'],
+      },
+    },
+  },
+];
+
+// Web search function using DuckDuckGo
+async function searchWeb(query: string): Promise<{ summary: string; results: string[] }> {
   try {
     // Use DuckDuckGo instant answer API (free, no key required)
     const response = await fetch(
@@ -21,31 +195,54 @@ async function searchWeb(query: string): Promise<string> {
     );
 
     if (!response.ok) {
-      return 'Web search unavailable.';
+      return { summary: '', results: ['Web search unavailable.'] };
     }
 
     const data = await response.json();
 
-    let results = '';
+    const results: string[] = [];
+    let summary = '';
 
     if (data.Abstract) {
-      results += `Summary: ${data.Abstract}\n`;
+      summary = data.Abstract;
     }
 
     if (data.RelatedTopics && data.RelatedTopics.length > 0) {
-      results += '\nRelated Information:\n';
-      data.RelatedTopics.slice(0, 5).forEach((topic: { Text?: string }) => {
+      data.RelatedTopics.slice(0, 5).forEach((topic: { Text?: string; FirstURL?: string }) => {
         if (topic.Text) {
-          results += `- ${topic.Text}\n`;
+          results.push(topic.Text);
         }
       });
     }
 
-    return results || 'No relevant results found.';
+    // Also try to get news-like results from the Answer field
+    if (data.Answer) {
+      results.unshift(data.Answer);
+    }
+
+    return { summary, results };
   } catch (error) {
     console.error('Web search error:', error);
-    return 'Web search temporarily unavailable.';
+    return { summary: '', results: ['Web search temporarily unavailable.'] };
   }
+}
+
+// Execute web search tool separately (not in main executor)
+async function executeWebSearch(query: string): Promise<string> {
+  const { summary, results } = await searchWeb(query);
+
+  let output = '';
+  if (summary) {
+    output += `Summary: ${summary}\n\n`;
+  }
+  if (results.length > 0) {
+    output += 'Search Results:\n';
+    results.forEach((r, i) => {
+      output += `${i + 1}. ${r}\n`;
+    });
+  }
+
+  return output || 'No relevant results found.';
 }
 
 // Get user's recent analysis history
@@ -84,25 +281,50 @@ async function getUserAnalysisHistory(userId: string, limit: number = 5): Promis
   }
 }
 
-const CHAT_SYSTEM_PROMPT = `You are CheekyTrader AI, a helpful trading assistant with access to real-time information and the user's trading analysis history.
+const CHAT_SYSTEM_PROMPT = `You are CheekyTrader AI, a helpful trading assistant with access to REAL-TIME market data tools.
 
 Current Date: ${new Date().toISOString().split('T')[0]}
 
-Your Capabilities:
-1. Knowledge Base: Access to comprehensive trading education materials
-2. Web Search: Can search the internet for current market news and information
-3. Analysis History: Can reference the user's previous trading analyses
+## Your Tools
+You have access to the following tools to help users:
 
-Guidelines:
+1. **get_stock_price** - Get current stock prices, daily change, volume
+2. **get_forex_quote** - Get real-time forex quotes with bid/ask
+3. **get_news_sentiment** - Get news articles and sentiment for stocks
+4. **get_historical_data** - Get price history for technical analysis
+5. **get_earnings_calendar** - Get upcoming earnings dates and estimates
+6. **get_analyst_ratings** - Get analyst ratings and price targets
+7. **search_trading_knowledge** - Search the trading education knowledge base
+8. **web_search** - Search the web for current news and events
+9. **get_economic_calendar** - Get forex economic calendar events
+
+## When to Use Tools
+- When user asks about a stock price → Use get_stock_price
+- When user asks about forex rates → Use get_forex_quote
+- When user asks about news → Use get_news_sentiment
+- When user asks about price history/charts → Use get_historical_data
+- When user asks about earnings → Use get_earnings_calendar
+- When user asks about analyst opinions → Use get_analyst_ratings
+- When user asks educational questions → Use search_trading_knowledge
+- When user asks about current events/news → Use web_search
+- When user asks about economic events for forex → Use get_economic_calendar
+
+## Guidelines
+- USE YOUR TOOLS to get real data - don't make up prices or information
 - Be conversational and helpful
 - Explain complex concepts in simple terms
-- Use the provided context (knowledge base, web search, analysis history) to ground your responses
 - Always clarify that you're providing educational information, not financial advice
-- When discussing specific stocks or trades, recommend using the Analysis feature for detailed recommendations
-- Reference the user's past analyses when relevant to provide personalized insights
-- For current market conditions or news, use the web search results provided
+- For detailed trade recommendations, suggest using the Analysis feature
+- When showing prices, always show the timestamp/date of the data
 
-When knowledge base, web search results, or analysis history is provided, use it to give more accurate and relevant responses.`;
+## Response Format
+- Keep responses concise but informative
+- Use markdown formatting for readability
+- When showing data, format it cleanly
+- Include relevant context when presenting numbers`;
+
+// Maximum tool execution rounds to prevent infinite loops
+const MAX_TOOL_ROUNDS = 3;
 
 export async function POST(request: NextRequest) {
   try {
@@ -128,77 +350,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { message, include_kb, kb_type } = validationResult.data;
+    const { message, kb_type } = validationResult.data;
 
     // Build messages array
     const messages: ChatMessage[] = [
       { role: 'system', content: CHAT_SYSTEM_PROMPT },
     ];
 
-    // Gather context from multiple sources in parallel
-    const contextPromises: Promise<{ type: string; content: string }>[] = [];
-
-    // Knowledge base search
-    if (include_kb) {
-      contextPromises.push(
-        searchKnowledgeBase(message, kb_type, 3)
-          .then((context) => ({
-            type: 'knowledge_base',
-            content: context.chunks.length > 0 ? formatContextForPrompt(context) : '',
-          }))
-          .catch(() => ({ type: 'knowledge_base', content: '' }))
-      );
-    }
-
-    // Web search for market-related queries
-    const marketKeywords = ['price', 'market', 'stock', 'news', 'today', 'current', 'now', 'latest'];
-    const shouldSearchWeb = marketKeywords.some((keyword) =>
-      message.toLowerCase().includes(keyword)
-    );
-
-    if (shouldSearchWeb) {
-      contextPromises.push(
-        searchWeb(`${message} stock market finance`)
-          .then((content) => ({ type: 'web_search', content }))
-      );
-    }
-
-    // User's analysis history
+    // Add user's analysis history context if relevant
     const analysisKeywords = ['my', 'previous', 'history', 'past', 'analysis', 'analyzed', 'portfolio'];
     const shouldIncludeHistory = analysisKeywords.some((keyword) =>
       message.toLowerCase().includes(keyword)
     );
 
     if (shouldIncludeHistory) {
-      contextPromises.push(
-        getUserAnalysisHistory(user.id)
-          .then((content) => ({ type: 'analysis_history', content }))
-      );
-    }
-
-    // Wait for all context to be gathered
-    const contextResults = await Promise.all(contextPromises);
-
-    // Add context to messages
-    let hasContext = false;
-    for (const ctx of contextResults) {
-      if (ctx.content) {
-        hasContext = true;
-        let contextLabel = '';
-        switch (ctx.type) {
-          case 'knowledge_base':
-            contextLabel = `Trading Knowledge Base Context`;
-            break;
-          case 'web_search':
-            contextLabel = `Web Search Results`;
-            break;
-          case 'analysis_history':
-            contextLabel = `Your Analysis History`;
-            break;
-        }
+      const historyContext = await getUserAnalysisHistory(user.id);
+      if (historyContext && historyContext !== 'No previous analyses found.') {
         messages.push({
           role: 'system',
-          content: `[${contextLabel}]\n${ctx.content}`,
+          content: `[Your Analysis History]\n${historyContext}`,
         });
       }
     }
@@ -206,26 +376,145 @@ export async function POST(request: NextRequest) {
     // Add user message
     messages.push({ role: 'user', content: message });
 
-    // Get AI response (using chat task type for conversational responses)
-    const response = await chatCompletion(messages, {
-      taskType: 'chat',
-      maxTokens: 2048,
-    });
+    // Track tools used and sources
+    const toolsUsed: string[] = [];
+    const sources: string[] = [];
 
-    const assistantMessage = response.choices[0]?.message?.content;
+    // Tool execution loop
+    let toolRounds = 0;
 
-    if (!assistantMessage) {
-      return NextResponse.json(
-        { error: 'No response generated' },
-        { status: 500 }
-      );
+    while (toolRounds < MAX_TOOL_ROUNDS) {
+      // Get AI response with tools available
+      const response = await chatCompletion(messages, {
+        taskType: 'chat',
+        maxTokens: 2048,
+        tools: CHAT_TOOLS,
+      });
+
+      const choice = response.choices[0];
+      const assistantMessage = choice?.message;
+
+      if (!assistantMessage) {
+        return NextResponse.json(
+          { error: 'No response generated' },
+          { status: 500 }
+        );
+      }
+
+      // Check if AI wants to use tools
+      if (choice.finish_reason === 'tool_calls' && assistantMessage.tool_calls?.length) {
+        toolRounds++;
+
+        // Add assistant message with tool calls
+        messages.push({
+          role: 'assistant',
+          content: assistantMessage.content || '',
+          tool_calls: assistantMessage.tool_calls,
+        });
+
+        // Process each tool call
+        const toolResults: { tool_call_id: string; role: 'tool'; content: string }[] = [];
+
+        for (const toolCall of assistantMessage.tool_calls) {
+          const toolName = toolCall.function.name;
+          toolsUsed.push(toolName);
+
+          let args: Record<string, unknown>;
+          try {
+            args = JSON.parse(toolCall.function.arguments);
+          } catch {
+            toolResults.push({
+              tool_call_id: toolCall.id,
+              role: 'tool',
+              content: JSON.stringify({ error: 'Invalid arguments' }),
+            });
+            continue;
+          }
+
+          console.log(`[Chat] Executing tool: ${toolName}`, args);
+
+          // Handle web_search separately
+          if (toolName === 'web_search') {
+            sources.push('web_search');
+            const searchResults = await executeWebSearch(args.query as string);
+            toolResults.push({
+              tool_call_id: toolCall.id,
+              role: 'tool',
+              content: searchResults,
+            });
+          } else {
+            // Use the standard executor for other tools
+            const executionResult = await executeToolCalls([
+              {
+                id: toolCall.id,
+                type: 'function',
+                function: {
+                  name: toolName,
+                  arguments: toolCall.function.arguments,
+                },
+              },
+            ]);
+
+            // Track source type
+            if (toolName === 'search_trading_knowledge') {
+              sources.push('knowledge_base');
+            } else if (toolName.startsWith('get_stock') || toolName.startsWith('get_forex') ||
+                       toolName.includes('earnings') || toolName.includes('analyst') ||
+                       toolName.includes('news') || toolName.includes('historical') ||
+                       toolName.includes('economic')) {
+              sources.push('market_data');
+            }
+
+            // Add tool results
+            for (const result of executionResult.toolResults) {
+              toolResults.push({
+                tool_call_id: result.tool_call_id,
+                role: 'tool',
+                content: result.content,
+              });
+            }
+          }
+        }
+
+        // Add all tool results to messages
+        for (const result of toolResults) {
+          messages.push(result);
+        }
+
+        // Continue loop to let AI process tool results
+        continue;
+      }
+
+      // AI is done (no more tool calls)
+      // Return the final response
+      const finalContent = assistantMessage.content;
+
+      if (!finalContent) {
+        return NextResponse.json(
+          { error: 'No response generated' },
+          { status: 500 }
+        );
+      }
+
+      // Dedupe sources
+      const uniqueSources = [...new Set(sources)];
+
+      return NextResponse.json({
+        message: finalContent,
+        kb_used: uniqueSources.length > 0,
+        sources: uniqueSources,
+        tools_used: [...new Set(toolsUsed)],
+      });
     }
 
+    // If we hit max tool rounds, return what we have
     return NextResponse.json({
-      message: assistantMessage,
-      kb_used: hasContext,
-      sources: contextResults.filter((c) => c.content).map((c) => c.type),
+      message: 'I apologize, but I\'m having trouble processing your request. Please try asking a simpler question.',
+      kb_used: false,
+      sources: [],
+      tools_used: toolsUsed,
     });
+
   } catch (error) {
     console.error('Chat API error:', error);
     return NextResponse.json(

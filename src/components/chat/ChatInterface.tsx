@@ -15,6 +15,7 @@ interface Message {
   timestamp: Date;
   kbUsed?: boolean;
   sources?: string[];
+  toolsUsed?: string[];
 }
 
 function SendIcon(props: React.SVGProps<SVGSVGElement>) {
@@ -102,6 +103,7 @@ export function ChatInterface() {
         timestamp: new Date(),
         kbUsed: data.kb_used,
         sources: data.sources || [],
+        toolsUsed: data.tools_used || [],
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
@@ -130,7 +132,7 @@ export function ChatInterface() {
           <div>
             <h2 className="font-semibold">AI Trading Assistant</h2>
             <p className="text-xs text-muted-foreground">
-              Powered by knowledge base
+              Real-time market data & knowledge base
             </p>
           </div>
         </div>
@@ -151,17 +153,17 @@ export function ChatInterface() {
                 Welcome to CheekyTrader AI
               </h3>
               <p className="text-muted-foreground max-w-md mb-8">
-                Ask me anything about trading, market analysis, or investment strategies.
-                I have access to a comprehensive trading knowledge base.
+                Ask me anything about trading! I can fetch real-time stock prices, forex rates,
+                news, earnings data, and search the web for current market information.
               </p>
               <div className="space-y-3 w-full max-w-md">
                 <p className="text-sm text-muted-foreground">Try asking:</p>
                 <div className="grid gap-2">
                   {[
-                    'What is a bull call spread?',
-                    'How do I read candlestick patterns?',
+                    'What is the current price of AAPL?',
+                    'What is the EUR/USD exchange rate?',
+                    'What are the latest news for TSLA?',
                     'Explain options Greeks to me',
-                    'What is the best strategy for high volatility?',
                   ].map((suggestion) => (
                     <button
                       key={suggestion}
@@ -244,6 +246,14 @@ export function ChatInterface() {
                           className="text-[10px] px-1.5 py-0 border-emerald-500/30 text-emerald-500"
                         >
                           History
+                        </Badge>
+                      )}
+                      {message.sources && message.sources.includes('market_data') && (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] px-1.5 py-0 border-amber-500/30 text-amber-500"
+                        >
+                          Live Data
                         </Badge>
                       )}
                     </div>
