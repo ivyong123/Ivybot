@@ -14,8 +14,7 @@ function getToolsForAnalysisType(analysisType: AnalysisType): OpenRouterTool[] {
       // Forex gets forex tools + knowledge base search from stock tools
       return [...FOREX_TOOLS, STOCK_TOOLS.find(t => t.function.name === 'search_trading_knowledge')!];
     case 'stock':
-    case 'options':
-      // Both stock and options use the stock tools (includes options chain, unusual whales, etc.)
+      // Stock analysis uses all stock tools (includes options chain, unusual whales, etc.)
       return STOCK_TOOLS;
     default:
       // For standalone analysis types, use all tools

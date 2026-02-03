@@ -1,5 +1,7 @@
 // Full analysis types (agentic AI with multiple tools, reflection, recommendations)
-export type FullAnalysisType = 'stock' | 'options' | 'forex';
+// stock = Options trading on stocks (AAPL, TSLA, etc.) with strategies, Greeks, unusual whales
+// forex = Currency pair trading with pip-based setups
+export type FullAnalysisType = 'stock' | 'forex';
 
 // Standalone data types (single tool, AI summary, no trading prediction)
 export type StandaloneType = 'technical' | 'fundamentals' | 'earnings' | 'news' | 'smart_money';
