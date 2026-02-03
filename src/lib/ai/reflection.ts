@@ -1,19 +1,43 @@
 import { chatCompletion } from './openrouter-client';
 import { ChatMessage, AnalysisCritique, ReflectionResult } from '@/types/ai';
 
-const CRITIQUE_SYSTEM_PROMPT = `You are a senior trading analyst reviewing another analyst's work. Your role is to critically evaluate the analysis and identify:
+const CRITIQUE_SYSTEM_PROMPT = `You are a senior trading analyst reviewing another analyst's work. Your role is to critically evaluate the analysis and identify issues.
 
+## CRITICAL CHECKS (Must Fail if Any Are True)
+
+### 1. Risk-to-Reward Ratio Check
+- Calculate: Risk = |entry_price - stop_loss|, Reward = |price_target - entry_price|
+- R:R Ratio = Reward / Risk
+- **FAIL if R:R is less than 2:1** - This is a HARD requirement
+- If R:R < 2:1, recommend changing to "wait" recommendation
+
+### 2. Entry Price Quality Check
+- Entry price should NOT be a random price in the middle of nowhere
+- Entry should be at a key support level (for longs) or resistance level (for shorts)
+- **FAIL if entry has no technical justification**
+- If entry is poor, recommend "wait" for better entry
+
+### 3. Confidence Threshold Check
+- **FAIL if confidence is below 60%** - should be "wait" recommendation
+- Confidence should reflect actual conviction, not be inflated
+
+### 4. Trade Justification Check
+- Does the setup have a clear catalyst or technical reason?
+- Are there conflicting signals that should cause hesitation?
+- **FAIL if the trade is being forced** with weak justification
+
+## Standard Review Items
 1. **Strengths**: What aspects of the analysis are well-done?
 2. **Weaknesses**: What could be improved or is missing?
 3. **Missing Data**: What additional data would strengthen the analysis?
-4. **Confidence Assessment**: On a scale of 0-100, how confident should we be in this analysis?
+4. **Confidence Assessment**: On a scale of 0-100, how confident should we be?
 5. **Recommendations**: Specific suggestions for improvement
 
-Be constructive but thorough. Focus on:
-- Data completeness (are all relevant factors considered?)
-- Logic soundness (do the conclusions follow from the data?)
-- Risk assessment (are risks properly identified?)
-- Actionability (is the recommendation clear and executable?)
+## Important Guidance
+- **It is BETTER to recommend "wait" than to force a bad trade**
+- A 2:1 R:R is the MINIMUM acceptable - don't approve trades below this
+- Entry price at current market price is suspicious unless at a key level
+- Low conviction trades should be "wait" not "hold"
 
 Respond in JSON format:
 {
@@ -21,8 +45,18 @@ Respond in JSON format:
   "weaknesses": ["..."],
   "missing_data": ["..."],
   "confidence_assessment": 0-100,
+  "risk_reward_check": {
+    "ratio": "X:1",
+    "passes": true/false,
+    "note": "explanation"
+  },
+  "entry_quality_check": {
+    "passes": true/false,
+    "note": "explanation"
+  },
   "recommendations": ["..."],
-  "should_refine": true/false
+  "should_refine": true/false,
+  "should_be_wait": true/false
 }`;
 
 const REFINEMENT_SYSTEM_PROMPT = `You are refining a trading analysis based on critique feedback. Your task is to:

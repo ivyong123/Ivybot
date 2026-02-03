@@ -316,6 +316,45 @@ function fixOptionsStrategyDates(strategy: TradeRecommendation['options_strategy
   };
 }
 
+// Validate risk-to-reward ratio and entry quality
+function validateTradeQuality(
+  recommendation: string,
+  entryPrice: number | null,
+  stopLoss: number | null,
+  priceTarget: number | null,
+  confidence: number,
+  analysisType: AnalysisType
+): { isValid: boolean; reason: string } {
+  // Skip validation for wait/hold recommendations
+  if (recommendation === 'wait' || recommendation === 'hold') {
+    return { isValid: true, reason: 'Wait/hold recommendation' };
+  }
+
+  // Check confidence threshold
+  if (confidence < 60) {
+    return { isValid: false, reason: `Low confidence (${confidence}%) - should be wait` };
+  }
+
+  // For stock/options, validate R:R
+  if (analysisType === 'stock' && entryPrice && stopLoss && priceTarget) {
+    const risk = Math.abs(entryPrice - stopLoss);
+    const reward = Math.abs(priceTarget - entryPrice);
+    const riskRewardRatio = risk > 0 ? reward / risk : 0;
+
+    console.log(`[Agent] R:R Validation - Entry: ${entryPrice}, SL: ${stopLoss}, Target: ${priceTarget}`);
+    console.log(`[Agent] R:R Validation - Risk: ${risk.toFixed(2)}, Reward: ${reward.toFixed(2)}, Ratio: ${riskRewardRatio.toFixed(2)}`);
+
+    if (riskRewardRatio < 2) {
+      return {
+        isValid: false,
+        reason: `R:R ratio ${riskRewardRatio.toFixed(1)}:1 is below minimum 2:1 - should be wait`
+      };
+    }
+  }
+
+  return { isValid: true, reason: 'Trade meets quality requirements' };
+}
+
 // Parse Claude's JSON recommendation
 function parseRecommendation(
   content: string,
@@ -340,19 +379,54 @@ function parseRecommendation(
     if (parsed.forex_setup) {
       // Handle the new nested format from the prompt
       forexSetup = parseForexSetup(parsed.forex_setup, symbol);
+
+      // Validate forex R:R - TP2 should be at least 2:1
+      if (forexSetup && forexSetup.trade) {
+        const slPips = forexSetup.trade.stopLossPips;
+        const tp2Pips = forexSetup.trade.takeProfit2Pips;
+        const tp2RR = slPips > 0 ? tp2Pips / slPips : 0;
+
+        console.log(`[Agent] Forex R:R - SL: ${slPips} pips, TP2: ${tp2Pips} pips, R:R: ${tp2RR.toFixed(2)}`);
+
+        if (tp2RR < 2 && parsed.recommendation !== 'wait' && parsed.recommendation !== 'hold') {
+          console.log('[Agent] Forex R:R below 2:1 - converting to wait');
+          parsed.recommendation = 'wait';
+          parsed.reasoning = `Original setup had R:R of ${tp2RR.toFixed(1)}:1 which is below minimum 2:1. Wait for better entry. Original analysis: ${parsed.reasoning}`;
+        }
+      }
+    }
+
+    // Validate trade quality for stocks
+    const validation = validateTradeQuality(
+      parsed.recommendation || 'hold',
+      parsed.entry_price,
+      parsed.stop_loss,
+      parsed.price_target,
+      parsed.confidence || 50,
+      analysisType
+    );
+
+    // If validation fails, convert to "wait" recommendation
+    let finalRecommendation = parsed.recommendation || 'hold';
+    let finalReasoning = parsed.reasoning || 'Analysis complete';
+
+    if (!validation.isValid) {
+      console.log(`[Agent] Trade validation failed: ${validation.reason}`);
+      finalRecommendation = 'wait';
+      finalReasoning = `${validation.reason}. Original analysis: ${parsed.reasoning || 'See analysis above'}`;
     }
 
     // Validate and return
     return {
       symbol: parsed.symbol || symbol.toUpperCase(),
       analysis_type: parsed.analysis_type || analysisType,
-      recommendation: parsed.recommendation || 'hold',
+      recommendation: finalRecommendation,
       confidence: parsed.confidence || 50,
       price_target: parsed.price_target || null,
       stop_loss: parsed.stop_loss || null,
       entry_price: parsed.entry_price || null,
       timeframe: parsed.timeframe || 'Unknown',
-      reasoning: parsed.reasoning || 'Analysis complete',
+      reasoning: finalReasoning,
       key_factors: parsed.key_factors || [],
       risks: parsed.risks || [],
       options_strategy: fixedOptionsStrategy || undefined,
