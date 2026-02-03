@@ -45,17 +45,61 @@ function TargetIcon(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+// Filter types
+type AssetType = 'all' | 'stock' | 'forex';
+type StatusFilter = 'all' | 'pending' | 'won' | 'lost' | 'expired' | 'partial';
+type DaysFilter = 7 | 30 | 90 | 365 | 0; // 0 = all time
+
+function DownloadIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" x2="12" y1="15" y2="3" />
+    </svg>
+  );
+}
+
+function FilterIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+    </svg>
+  );
+}
+
 export function BacktestDashboard() {
   const [summary, setSummary] = useState<BacktestSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [symbols, setSymbols] = useState<string[]>([]);
+
+  // Filter states
+  const [daysFilter, setDaysFilter] = useState<DaysFilter>(0);
+  const [assetTypeFilter, setAssetTypeFilter] = useState<AssetType>('all');
+  const [symbolFilter, setSymbolFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Build query string from filters
+  const buildQueryString = (refresh = false) => {
+    const params = new URLSearchParams();
+    if (refresh) params.set('refresh', 'true');
+    if (daysFilter > 0) params.set('days', daysFilter.toString());
+    if (assetTypeFilter !== 'all') params.set('assetType', assetTypeFilter);
+    if (symbolFilter) params.set('symbol', symbolFilter);
+    if (statusFilter !== 'all') params.set('status', statusFilter);
+    const queryString = params.toString();
+    return queryString ? `?${queryString}` : '';
+  };
 
   const fetchData = async (refresh = false) => {
     try {
       if (refresh) setIsRefreshing(true);
       else setIsLoading(true);
 
-      const response = await fetch(`/api/backtest${refresh ? '?refresh=true' : ''}`);
+      const response = await fetch(`/api/backtest${buildQueryString(refresh)}`);
       if (response.ok) {
         const data = await response.json();
         setSummary(data);
@@ -70,9 +114,64 @@ export function BacktestDashboard() {
     }
   };
 
+  const fetchSymbols = async () => {
+    try {
+      const response = await fetch('/api/backtest?symbols=true');
+      if (response.ok) {
+        const data = await response.json();
+        setSymbols(data.symbols || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch symbols:', error);
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      setIsExporting(true);
+      const response = await fetch(`/api/backtest/export${buildQueryString()}`);
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `backtest-report-${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        toast.success('Report downloaded');
+      } else {
+        toast.error('Failed to export report');
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Failed to export report');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const applyFilters = () => {
+    fetchData();
+  };
+
+  const clearFilters = () => {
+    setDaysFilter(0);
+    setAssetTypeFilter('all');
+    setSymbolFilter('');
+    setStatusFilter('all');
+  };
+
   useEffect(() => {
     fetchData();
+    fetchSymbols();
   }, []);
+
+  // Re-fetch when filters change
+  useEffect(() => {
+    fetchData();
+  }, [daysFilter, assetTypeFilter, symbolFilter, statusFilter]);
 
   if (isLoading) {
     return (
@@ -97,21 +196,115 @@ export function BacktestDashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold gradient-text">Backtest Performance</h1>
           <p className="text-muted-foreground">Track the accuracy of AI predictions</p>
         </div>
-        <Button
-          variant="outline"
-          onClick={() => fetchData(true)}
-          disabled={isRefreshing}
-          className="gap-2"
-        >
-          <RefreshIcon className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setShowFilters(!showFilters)}
+            className="gap-2"
+          >
+            <FilterIcon className="h-4 w-4" />
+            Filters
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleExport}
+            disabled={isExporting}
+            className="gap-2"
+          >
+            <DownloadIcon className={`h-4 w-4 ${isExporting ? 'animate-pulse' : ''}`} />
+            Export CSV
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => fetchData(true)}
+            disabled={isRefreshing}
+            className="gap-2"
+          >
+            <RefreshIcon className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
+
+      {/* Filters Panel */}
+      {showFilters && (
+        <div className="glass-card p-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            {/* Time Period */}
+            <div>
+              <label className="text-sm text-muted-foreground block mb-2">Time Period</label>
+              <select
+                value={daysFilter}
+                onChange={(e) => setDaysFilter(Number(e.target.value) as DaysFilter)}
+                className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm"
+              >
+                <option value={0}>All Time</option>
+                <option value={7}>Last 7 Days</option>
+                <option value={30}>Last 30 Days</option>
+                <option value={90}>Last 90 Days</option>
+                <option value={365}>Last Year</option>
+              </select>
+            </div>
+
+            {/* Asset Type */}
+            <div>
+              <label className="text-sm text-muted-foreground block mb-2">Asset Type</label>
+              <select
+                value={assetTypeFilter}
+                onChange={(e) => setAssetTypeFilter(e.target.value as AssetType)}
+                className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm"
+              >
+                <option value="all">All Types</option>
+                <option value="stock">Stocks</option>
+                <option value="forex">Forex</option>
+              </select>
+            </div>
+
+            {/* Symbol */}
+            <div>
+              <label className="text-sm text-muted-foreground block mb-2">Symbol</label>
+              <select
+                value={symbolFilter}
+                onChange={(e) => setSymbolFilter(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm"
+              >
+                <option value="">All Symbols</option>
+                {symbols.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Status */}
+            <div>
+              <label className="text-sm text-muted-foreground block mb-2">Status</label>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+                className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm"
+              >
+                <option value="all">All Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="won">Won</option>
+                <option value="lost">Lost</option>
+                <option value="partial">Partial</option>
+                <option value="expired">Expired</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="ghost" size="sm" onClick={clearFilters}>
+              Clear Filters
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Main Stats Grid */}
       <div className="grid gap-4 md:grid-cols-4">

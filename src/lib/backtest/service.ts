@@ -4,6 +4,14 @@ import { TradeRecommendation } from '@/types/analysis';
 import { getStockQuote } from '@/lib/providers/polygon';
 import { getForexQuote } from '@/lib/providers/twelvedata';
 
+// Filter options for backtest queries
+export interface BacktestFilters {
+  days?: number;           // Filter by last N days
+  assetType?: 'stock' | 'forex' | 'all';  // Filter by asset type
+  symbol?: string;         // Filter by specific symbol
+  status?: 'pending' | 'won' | 'lost' | 'expired' | 'partial' | 'all';  // Filter by status
+}
+
 // Save a prediction for backtesting
 export async function savePrediction(
   jobId: string,
@@ -211,15 +219,35 @@ async function getCurrentPrice(symbol: string, type: 'stock' | 'forex'): Promise
   }
 }
 
-// Calculate backtest statistics
-export async function getBacktestStats(userId: string): Promise<BacktestStats> {
+// Calculate backtest statistics with optional filters
+export async function getBacktestStats(userId: string, filters?: BacktestFilters): Promise<BacktestStats> {
   const supabase = createAdminClient();
 
-  const { data: records, error } = await supabase
+  let query = supabase
     .from('backtest_records')
     .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
+    .eq('user_id', userId);
+
+  // Apply filters
+  if (filters?.days) {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - filters.days);
+    query = query.gte('created_at', cutoffDate.toISOString());
+  }
+
+  if (filters?.assetType && filters.assetType !== 'all') {
+    query = query.eq('analysis_type', filters.assetType);
+  }
+
+  if (filters?.symbol) {
+    query = query.eq('symbol', filters.symbol.toUpperCase());
+  }
+
+  if (filters?.status && filters.status !== 'all') {
+    query = query.eq('status', filters.status);
+  }
+
+  const { data: records, error } = await query.order('created_at', { ascending: false });
 
   if (error || !records) {
     return getEmptyStats();
@@ -322,17 +350,38 @@ export async function getBacktestStats(userId: string): Promise<BacktestStats> {
   };
 }
 
-// Get full backtest summary
-export async function getBacktestSummary(userId: string): Promise<BacktestSummary> {
+// Get full backtest summary with optional filters
+export async function getBacktestSummary(userId: string, filters?: BacktestFilters): Promise<BacktestSummary> {
   const supabase = createAdminClient();
-  const stats = await getBacktestStats(userId);
+  const stats = await getBacktestStats(userId, filters);
 
-  const { data: records } = await supabase
+  let query = supabase
     .from('backtest_records')
     .select('*')
-    .eq('user_id', userId)
+    .eq('user_id', userId);
+
+  // Apply same filters
+  if (filters?.days) {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - filters.days);
+    query = query.gte('created_at', cutoffDate.toISOString());
+  }
+
+  if (filters?.assetType && filters.assetType !== 'all') {
+    query = query.eq('analysis_type', filters.assetType);
+  }
+
+  if (filters?.symbol) {
+    query = query.eq('symbol', filters.symbol.toUpperCase());
+  }
+
+  if (filters?.status && filters.status !== 'all') {
+    query = query.eq('status', filters.status);
+  }
+
+  const { data: records } = await query
     .order('created_at', { ascending: false })
-    .limit(50);
+    .limit(100);
 
   const recentTrades = records || [];
 
@@ -387,6 +436,99 @@ export async function getBacktestSummary(userId: string): Promise<BacktestSummar
     by_strategy: byStrategy,
     monthly_performance: monthlyPerformance,
   };
+}
+
+// Export backtest data to CSV format
+export async function exportBacktestData(userId: string, filters?: BacktestFilters): Promise<string> {
+  const supabase = createAdminClient();
+
+  let query = supabase
+    .from('backtest_records')
+    .select('*')
+    .eq('user_id', userId);
+
+  // Apply filters
+  if (filters?.days) {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - filters.days);
+    query = query.gte('created_at', cutoffDate.toISOString());
+  }
+
+  if (filters?.assetType && filters.assetType !== 'all') {
+    query = query.eq('analysis_type', filters.assetType);
+  }
+
+  if (filters?.symbol) {
+    query = query.eq('symbol', filters.symbol.toUpperCase());
+  }
+
+  if (filters?.status && filters.status !== 'all') {
+    query = query.eq('status', filters.status);
+  }
+
+  const { data: records, error } = await query.order('created_at', { ascending: false });
+
+  if (error || !records || records.length === 0) {
+    return 'No data to export';
+  }
+
+  // CSV headers
+  const headers = [
+    'Date',
+    'Symbol',
+    'Type',
+    'Direction',
+    'Entry Price',
+    'Target Price',
+    'Stop Loss',
+    'Confidence',
+    'Status',
+    'Exit Price',
+    'P&L %',
+    'Timeframe',
+    'Strategy',
+  ];
+
+  // CSV rows
+  const rows = records.map(r => [
+    new Date(r.prediction_date).toLocaleDateString(),
+    r.symbol,
+    r.analysis_type,
+    r.predicted_direction,
+    r.entry_price?.toFixed(r.analysis_type === 'forex' ? 5 : 2) || '',
+    r.target_price?.toFixed(r.analysis_type === 'forex' ? 5 : 2) || '',
+    r.stop_loss?.toFixed(r.analysis_type === 'forex' ? 5 : 2) || '',
+    r.confidence?.toString() || '',
+    r.status,
+    r.actual_exit_price?.toFixed(r.analysis_type === 'forex' ? 5 : 2) || '',
+    r.pnl_percent?.toFixed(2) || '',
+    r.timeframe || '',
+    r.options_strategy || '',
+  ]);
+
+  // Combine headers and rows
+  const csv = [
+    headers.join(','),
+    ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+  ].join('\n');
+
+  return csv;
+}
+
+// Get list of unique symbols for filter dropdown
+export async function getBacktestSymbols(userId: string): Promise<string[]> {
+  const supabase = createAdminClient();
+
+  const { data: records } = await supabase
+    .from('backtest_records')
+    .select('symbol')
+    .eq('user_id', userId);
+
+  if (!records) return [];
+
+  // Get unique symbols
+  const symbols = [...new Set(records.map(r => r.symbol))].sort();
+  return symbols;
 }
 
 // Helper functions

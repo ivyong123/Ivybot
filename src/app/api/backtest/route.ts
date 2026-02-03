@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { getBacktestSummary, checkPendingPredictions } from '@/lib/backtest';
+import { getBacktestSummary, checkPendingPredictions, getBacktestSymbols, BacktestFilters } from '@/lib/backtest';
 
-// GET - Get backtest statistics
+// GET - Get backtest statistics with optional filters
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -12,8 +12,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if refresh is requested
     const { searchParams } = new URL(request.url);
+
+    // Check if refresh is requested
     const refresh = searchParams.get('refresh') === 'true';
 
     if (refresh) {
@@ -22,8 +23,37 @@ export async function GET(request: NextRequest) {
       console.log(`[Backtest] Updated ${updated} predictions`);
     }
 
-    // Get backtest summary
-    const summary = await getBacktestSummary(user.id);
+    // Check if symbols list is requested
+    if (searchParams.get('symbols') === 'true') {
+      const symbols = await getBacktestSymbols(user.id);
+      return NextResponse.json({ symbols });
+    }
+
+    // Parse filters from query params
+    const filters: BacktestFilters = {};
+
+    const days = searchParams.get('days');
+    if (days) {
+      filters.days = parseInt(days, 10);
+    }
+
+    const assetType = searchParams.get('assetType');
+    if (assetType && ['stock', 'forex', 'all'].includes(assetType)) {
+      filters.assetType = assetType as 'stock' | 'forex' | 'all';
+    }
+
+    const symbol = searchParams.get('symbol');
+    if (symbol) {
+      filters.symbol = symbol;
+    }
+
+    const status = searchParams.get('status');
+    if (status && ['pending', 'won', 'lost', 'expired', 'partial', 'all'].includes(status)) {
+      filters.status = status as BacktestFilters['status'];
+    }
+
+    // Get backtest summary with filters
+    const summary = await getBacktestSummary(user.id, filters);
 
     return NextResponse.json(summary);
   } catch (error) {
