@@ -185,16 +185,22 @@ export function StrategyResults({ recommendation, jobId }: StrategyResultsProps)
               <div>
                 <div className="flex items-baseline gap-3">
                   <h2 className="text-3xl font-bold">{recommendation.symbol}</h2>
-                  {/* Show current price */}
-                  {recommendation.entry_price && (
+                  {/* Show CURRENT market price (not entry price) */}
+                  {recommendation.current_price && (
                     <span className="text-xl font-mono text-muted-foreground">
-                      {currencyPrefix}{formatPrice(recommendation.entry_price, recommendation.symbol, isForex)}
+                      {currencyPrefix}{formatPrice(recommendation.current_price, recommendation.symbol, isForex)}
                     </span>
                   )}
-                  {/* For forex, show from forex_setup */}
-                  {!recommendation.entry_price && recommendation.forex_setup?.currentPrice && (
+                  {/* Fallback: For forex, show from forex_setup.currentPrice */}
+                  {!recommendation.current_price && recommendation.forex_setup?.currentPrice && (
                     <span className="text-xl font-mono text-muted-foreground">
                       {formatPrice(recommendation.forex_setup.currentPrice, recommendation.symbol, true)}
+                    </span>
+                  )}
+                  {/* Fallback: For stocks/options, show from stock_result.currentPrice */}
+                  {!recommendation.current_price && !recommendation.forex_setup?.currentPrice && recommendation.stock_result?.currentPrice && (
+                    <span className="text-xl font-mono text-muted-foreground">
+                      {currencyPrefix}{formatPrice(recommendation.stock_result.currentPrice, recommendation.symbol, false)}
                     </span>
                   )}
                 </div>

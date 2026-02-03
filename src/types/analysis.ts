@@ -1,5 +1,5 @@
 // Full analysis types (agentic AI with multiple tools, reflection, recommendations)
-export type FullAnalysisType = 'stock' | 'forex';
+export type FullAnalysisType = 'stock' | 'options' | 'forex';
 
 // Standalone data types (single tool, AI summary, no trading prediction)
 export type StandaloneType = 'technical' | 'fundamentals' | 'earnings' | 'news' | 'smart_money';
@@ -44,9 +44,10 @@ export interface TradeRecommendation {
   analysis_type: AnalysisType;
   recommendation: 'strong_buy' | 'buy' | 'hold' | 'sell' | 'strong_sell' | 'wait';
   confidence: number; // 0-100
+  current_price: number | null; // Actual current market price
   price_target: number | null;
   stop_loss: number | null;
-  entry_price: number | null;
+  entry_price: number | null; // Strategic entry level (may differ from current price)
   timeframe: string;
   reasoning: string;
   key_factors: KeyFactor[];

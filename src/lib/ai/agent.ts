@@ -14,6 +14,8 @@ function getToolsForAnalysisType(analysisType: AnalysisType): OpenRouterTool[] {
       // Forex gets forex tools + knowledge base search from stock tools
       return [...FOREX_TOOLS, STOCK_TOOLS.find(t => t.function.name === 'search_trading_knowledge')!];
     case 'stock':
+    case 'options':
+      // Both stock and options use the stock tools (includes options chain, unusual whales, etc.)
       return STOCK_TOOLS;
     default:
       // For standalone analysis types, use all tools
@@ -416,12 +418,23 @@ function parseRecommendation(
       finalReasoning = `${validation.reason}. Original analysis: ${parsed.reasoning || 'See analysis above'}`;
     }
 
+    // Extract current price from various possible sources
+    let currentPrice = parsed.current_price || parsed.currentPrice || null;
+    // Fallback: try to get from forex_setup or stock_result
+    if (!currentPrice && forexSetup?.currentPrice) {
+      currentPrice = forexSetup.currentPrice;
+    }
+    if (!currentPrice && parsed.stock_result?.currentPrice) {
+      currentPrice = parsed.stock_result.currentPrice;
+    }
+
     // Validate and return
     return {
       symbol: parsed.symbol || symbol.toUpperCase(),
       analysis_type: parsed.analysis_type || analysisType,
       recommendation: finalRecommendation,
       confidence: parsed.confidence || 50,
+      current_price: currentPrice,
       price_target: parsed.price_target || null,
       stop_loss: parsed.stop_loss || null,
       entry_price: parsed.entry_price || null,
@@ -430,6 +443,7 @@ function parseRecommendation(
       key_factors: parsed.key_factors || [],
       risks: parsed.risks || [],
       options_strategy: fixedOptionsStrategy || undefined,
+      stock_result: parsed.stock_result || undefined,
       forex_setup: forexSetup,
       data_sources: parsed.data_sources || [],
       generated_at: new Date().toISOString(),
@@ -444,6 +458,7 @@ function parseRecommendation(
       analysis_type: analysisType,
       recommendation: 'hold',
       confidence: 30,
+      current_price: null,
       price_target: null,
       stop_loss: null,
       entry_price: null,
