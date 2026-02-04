@@ -100,13 +100,27 @@ CRITICAL: All expiration dates, earnings dates, and time-sensitive data MUST be 
 
     // Agentic loop - let Claude decide what tools to use
     let iteration = 0;
+    const FORCE_ANALYSIS_AFTER_TOOLS = 8; // Force analysis after this many tool calls
+
     while (iteration < MAX_ITERATIONS && state.tool_calls_made < MAX_TOOL_CALLS) {
       iteration++;
       console.log(`[Agent] Iteration ${iteration}/${MAX_ITERATIONS}, tool calls: ${state.tool_calls_made}/${MAX_TOOL_CALLS}`);
 
+      // If we've made enough tool calls, force analysis by removing tools
+      const shouldForceAnalysis = state.tool_calls_made >= FORCE_ANALYSIS_AFTER_TOOLS;
+
+      if (shouldForceAnalysis) {
+        console.log(`[Agent] Forcing analysis - removing tools after ${state.tool_calls_made} tool calls`);
+        state.messages.push({
+          role: 'user',
+          content: 'You have gathered enough data. STOP calling tools and provide your complete analysis NOW. Do not call any more tools.',
+        });
+      }
+
       // Call Claude with tools (using analysis task type for accurate tool use)
+      // Remove tools if we need to force analysis
       const response = await chatCompletion(state.messages, {
-        tools: tools,
+        tools: shouldForceAnalysis ? undefined : tools,
         taskType: 'analysis',
         maxTokens: 4096,
       });
