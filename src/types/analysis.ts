@@ -137,7 +137,7 @@ export interface ForexSetup {
 
   trade: {
     action: 'BUY' | 'SELL';
-    orderType: 'LIMIT' | 'MARKET';
+    orderType: 'LIMIT' | 'MARKET' | 'BUY_LIMIT' | 'BUY_STOP' | 'SELL_LIMIT' | 'SELL_STOP';
     entryPrice: number;
     stopLoss: number;
     takeProfit1: number;
@@ -260,7 +260,7 @@ export interface StockOptionsResult {
   };
 
   execution: {
-    orderType: 'LIMIT' | 'MARKET';
+    orderType: 'LIMIT' | 'MARKET' | 'BUY_LIMIT' | 'BUY_STOP' | 'SELL_LIMIT' | 'SELL_STOP';
     entryPrice: number;
     entryInstructions: string;
     profitTarget: string;

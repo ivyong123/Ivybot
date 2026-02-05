@@ -566,7 +566,9 @@ export function StrategyResults({ recommendation, jobId }: StrategyResultsProps)
                 </div>
                 <div className="p-3 rounded-xl glass-subtle text-center">
                   <p className="text-xs text-muted-foreground mb-1">Order Type</p>
-                  <p className="text-lg font-bold">{recommendation.forex_setup.trade.orderType}</p>
+                  <p className={`text-lg font-bold ${recommendation.forex_setup.trade.orderType?.includes('BUY') ? 'text-emerald-500' : recommendation.forex_setup.trade.orderType?.includes('SELL') ? 'text-red-500' : ''}`}>
+                    {recommendation.forex_setup.trade.orderType?.replace('_', ' ') || 'MARKET'}
+                  </p>
                 </div>
               </div>
             </>

@@ -575,6 +575,9 @@ function parseForexSetup(raw: Record<string, unknown>, symbol: string): TradeRec
   const timing = raw.timing as Record<string, unknown> | undefined;
   const newsWarning = raw.news_warning as Record<string, unknown> | undefined;
 
+  // Get current price (market price) - different from entry price
+  const currentPrice = Number(raw.current_price || trade?.current_price || 0);
+
   // Calculate pip values if we have entry and SL
   const entryPrice = Number(trade?.entry_price || raw.entry_price || 0);
   const stopLossPrice = Number(getNestedValue(levels, 'stop_loss') || trade?.stop_loss || raw.stop_loss_price || 0);
@@ -587,7 +590,7 @@ function parseForexSetup(raw: Record<string, unknown>, symbol: string): TradeRec
   const pipMultiplier = isJPY ? 100 : 10000;
 
   const direction = (trade?.direction || raw.direction || 'long') as string;
-  const isLong = direction.toLowerCase() === 'long' || direction === 'BUY';
+  const isLong = direction.toLowerCase() === 'long' || direction.toLowerCase() === 'buy';
 
   // Calculate pip distances
   const slPips = Math.abs((entryPrice - stopLossPrice) * pipMultiplier);
@@ -595,14 +598,29 @@ function parseForexSetup(raw: Record<string, unknown>, symbol: string): TradeRec
   const tp2Pips = tp2Price ? Math.abs((tp2Price - entryPrice) * pipMultiplier) : tp1Pips * 2;
   const tp3Pips = tp3Price ? Math.abs((tp3Price - entryPrice) * pipMultiplier) : tp1Pips * 3;
 
+  // Determine order type based on entry vs current price
+  // BUY: entry < current = BUY LIMIT (waiting for pullback), entry > current = BUY STOP (breakout)
+  // SELL: entry > current = SELL LIMIT (waiting for rally), entry < current = SELL STOP (breakdown)
+  let orderType: 'BUY_LIMIT' | 'BUY_STOP' | 'SELL_LIMIT' | 'SELL_STOP' | 'MARKET';
+  const priceToUse = currentPrice > 0 ? currentPrice : entryPrice;
+
+  if (isLong) {
+    orderType = entryPrice < priceToUse ? 'BUY_LIMIT' : entryPrice > priceToUse ? 'BUY_STOP' : 'MARKET';
+  } else {
+    orderType = entryPrice > priceToUse ? 'SELL_LIMIT' : entryPrice < priceToUse ? 'SELL_STOP' : 'MARKET';
+  }
+
+  // Determine action based on order type
+  const action = orderType.startsWith('BUY') ? 'BUY' : 'SELL';
+
   return {
     pair: String(trade?.pair || raw.pair || symbol),
-    currentPrice: entryPrice,
+    currentPrice: priceToUse,
     direction: isLong ? 'BULLISH' : 'BEARISH',
 
     trade: {
-      action: isLong ? 'BUY' : 'SELL',
-      orderType: (trade?.order_type || 'LIMIT') as 'LIMIT' | 'MARKET',
+      action,
+      orderType: orderType as string, // BUY_LIMIT, BUY_STOP, SELL_LIMIT, SELL_STOP, or MARKET
       entryPrice,
       stopLoss: stopLossPrice,
       takeProfit1: tp1Price || entryPrice + (isLong ? tp1Pips : -tp1Pips) / pipMultiplier,
@@ -673,9 +691,9 @@ function parseForexSetup(raw: Record<string, unknown>, symbol: string): TradeRec
     },
 
     execution: {
-      entryInstructions: `Place ${isLong ? 'BUY' : 'SELL'} order at ${entryPrice}`,
-      profitTargets: `TP1: ${tp1Pips} pips, TP2: ${tp2Pips} pips, TP3: ${tp3Pips} pips`,
-      stopLossRules: `Set SL at ${stopLossPrice} (${slPips} pips)`,
+      entryInstructions: `Place ${orderType.replace('_', ' ')} order at ${entryPrice}`,
+      profitTargets: `TP1: ${Math.round(tp1Pips)} pips, TP2: ${Math.round(tp2Pips)} pips, TP3: ${Math.round(tp3Pips)} pips`,
+      stopLossRules: `Set SL at ${stopLossPrice} (${Math.round(slPips)} pips)`,
       managementRules: [
         'Move SL to breakeven after TP1 is hit',
         'Close 50% at TP1, 30% at TP2, 20% at TP3',
