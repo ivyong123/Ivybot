@@ -78,7 +78,23 @@ Please analyze ${symbol.toUpperCase()} and provide a comprehensive ${analysisTyp
 
 CRITICAL: All expiration dates, earnings dates, and time-sensitive data MUST be in the future relative to today (${formattedDate}). Do NOT use dates from 2023, 2024, or any past date. Options expirations should typically be 1-12 weeks from today.`;
     if (additionalContext) {
-      userPrompt += `\n\nAdditional context from the user: ${additionalContext}`;
+      userPrompt += `
+
+## USER CONTEXT (IMPORTANT - 30-40% WEIGHT)
+The user has provided specific context that MUST influence your analysis:
+"${additionalContext}"
+
+You MUST:
+1. Directly address this context in your analysis
+2. Weight this context at 30-40% of your recommendation decision
+3. Tailor your strategy, timeframe, and risk approach based on what the user specified
+4. Explicitly mention how you incorporated their context in your reasoning
+
+Examples of how to apply user context:
+- "Looking for scalp trade" → Focus on shorter timeframes, tighter SL/TP, quicker entries
+- "Swing trade opportunity" → Focus on H4/D1 timeframes, wider SL/TP, key levels
+- "Concerned about earnings" → Address earnings risk, consider IV, suggest hedging
+- "Already long, looking for exit" → Focus on resistance levels, trailing stops, profit targets`;
     }
     userPrompt += `\n\nStart by gathering relevant data using the available tools, then provide your analysis.`;
 

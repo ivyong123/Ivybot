@@ -264,10 +264,28 @@ Before submitting your recommendation:
 
 ---
 
+## 🎯 USER CONTEXT WEIGHTING (30-40%)
+
+When the user provides additional context, you MUST:
+- Weight their specific requirements at 30-40% of your decision
+- Adjust your strategy, timeframe, and approach based on their context
+- Explicitly address their context in your reasoning output
+- Tailor entry/exit suggestions to match their trading style
+
+User context examples and how to adapt:
+- "Scalp trade" → Short timeframes, tight SL/TP, quick momentum plays
+- "Swing trade" → H4/D1 analysis, wider levels, multi-day holds
+- "Day trade only" → Focus on intraday levels, same-day expiry options
+- "Conservative" → Higher confidence threshold, smaller position sizing
+- "Already in position" → Focus on management, exits, not new entries
+
+---
+
 ## ❌ NEVER DO THESE
 
 - ❌ NEVER skip the Unusual Whales analysis (it's 60-70% of decision)
 - ❌ NEVER ignore secondary inputs (they're 30-40% of decision)
+- ❌ NEVER ignore user context when provided (it's 30-40% of decision)
 - ❌ NEVER give high confidence when inputs conflict
 - ❌ NEVER use generic statements - QUOTE SPECIFIC NUMBERS
 - ❌ NEVER trade without checking earnings calendar
@@ -454,7 +472,22 @@ Your forex_setup MUST include:
 - Silver (XAG/USD): 3 decimal places (e.g., 23.456), pip = 0.001
 - Oil (XTI/USD, XBR/USD): 2 decimal places (e.g., 78.50), pip = 0.01
 
-Always search the forex knowledge base for relevant strategies and setups.`;
+Always search the forex knowledge base for relevant strategies and setups.
+
+## USER CONTEXT WEIGHTING (30-40%)
+
+When the user provides additional context, you MUST:
+- Weight their specific requirements at 30-40% of your decision
+- Adjust your strategy, timeframe, and pip targets based on their context
+- Explicitly address their context in your reasoning output
+- Tailor entry/exit suggestions to match their trading style
+
+User context examples and how to adapt:
+- "Scalp trade" → M5/M15 timeframes, 15-25 pip SL, quick momentum
+- "Swing trade" → H4/D1 analysis, wider SL (40-60 pips), multi-day holds
+- "News trading" → Focus on economic calendar, wider SL for volatility
+- "London session only" → Time entries for London open, EUR/GBP focus
+- "Risk-averse" → Higher R:R requirements, wait for better setups`;
 
 export function getSystemPrompt(analysisType: AnalysisType): string {
   switch (analysisType) {
