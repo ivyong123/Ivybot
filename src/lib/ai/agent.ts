@@ -567,7 +567,8 @@ function getNestedValue(obj: Record<string, unknown> | undefined, key: string): 
 }
 
 // Parse and normalize forex setup from AI response
-function parseForexSetup(raw: Record<string, unknown>, symbol: string): TradeRecommendation['forex_setup'] {
+// Returns undefined if data is invalid
+function parseForexSetup(raw: Record<string, unknown>, symbol: string): TradeRecommendation['forex_setup'] | undefined {
   // Handle the new nested format from the comprehensive prompt
   const trade = raw.trade as Record<string, unknown> | undefined;
   const levels = raw.levels as Record<string, unknown> | undefined;
@@ -576,18 +577,60 @@ function parseForexSetup(raw: Record<string, unknown>, symbol: string): TradeRec
   const newsWarning = raw.news_warning as Record<string, unknown> | undefined;
 
   // Get current price (market price) - different from entry price
-  const currentPrice = Number(raw.current_price || trade?.current_price || 0);
+  const rawCurrentPrice = Number(raw.current_price || trade?.current_price || 0);
 
   // Get raw values from AI
-  const entryPrice = Number(trade?.entry_price || raw.entry_price || 0);
+  const rawEntryPrice = Number(trade?.entry_price || raw.entry_price || 0);
   const rawStopLoss = Number(getNestedValue(levels, 'stop_loss') || trade?.stop_loss || raw.stop_loss_price || 0);
   const rawTp1 = Number(getNestedValue(levels, 'take_profit_1') || trade?.take_profit_1 || raw.take_profit_price || 0);
   const rawTp2 = Number(getNestedValue(levels, 'take_profit_2') || trade?.take_profit_2 || 0);
   const rawTp3 = Number(getNestedValue(levels, 'take_profit_3') || trade?.take_profit_3 || 0);
 
+  // Try to get a valid price from support/resistance levels as fallback
+  const support1 = Number((levels?.key_support as number[])?.[0] || 0);
+  const resistance1 = Number((levels?.key_resistance as number[])?.[0] || 0);
+
   // Determine pip multiplier (JPY pairs use 100, others use 10000)
   const isJPY = symbol.toUpperCase().includes('JPY');
   const pipMultiplier = isJPY ? 100 : 10000;
+
+  // Minimum valid price based on pair type (JPY pairs are around 100-200, others around 0.5-2.0)
+  const minValidPrice = isJPY ? 50 : 0.1;
+
+  // Determine the best available price for entry
+  let entryPrice = rawEntryPrice;
+  let currentPrice = rawCurrentPrice;
+
+  // If entry price is invalid, try fallbacks
+  if (entryPrice < minValidPrice) {
+    console.log(`[Agent] Invalid entry price ${entryPrice}, trying fallbacks...`);
+    // Try current price
+    if (rawCurrentPrice >= minValidPrice) {
+      entryPrice = rawCurrentPrice;
+      console.log(`[Agent] Using current price as entry: ${entryPrice}`);
+    }
+    // Try support/resistance as fallback
+    else if (support1 >= minValidPrice) {
+      entryPrice = support1;
+      currentPrice = support1;
+      console.log(`[Agent] Using support level as entry: ${entryPrice}`);
+    }
+    else if (resistance1 >= minValidPrice) {
+      entryPrice = resistance1;
+      currentPrice = resistance1;
+      console.log(`[Agent] Using resistance level as entry: ${entryPrice}`);
+    }
+    else {
+      // No valid price available - return undefined
+      console.log('[Agent] No valid forex price available, skipping forex_setup');
+      return undefined;
+    }
+  }
+
+  // If current price is still invalid, use entry price
+  if (currentPrice < minValidPrice) {
+    currentPrice = entryPrice;
+  }
 
   const direction = (trade?.direction || raw.direction || 'long') as string;
   const isLong = direction.toLowerCase() === 'long' || direction.toLowerCase() === 'buy';
