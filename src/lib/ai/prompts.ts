@@ -395,18 +395,38 @@ Analyze which trading session is optimal:
 - **Asian Session**: 00:00-09:00 GMT (most liquid for JPY, AUD, NZD pairs)
 - **London/NY Overlap**: 13:00-17:00 GMT (highest volatility - BEST for most pairs)
 
-## MANDATORY PIP REQUIREMENTS
-**Stop Loss (SL):**
-- Minimum: 20 pips
-- Maximum: 50 pips
-- NEVER set SL below 20 pips (gets stopped out by noise)
+## MANDATORY PIP REQUIREMENTS (VARIES BY INSTRUMENT!)
 
-**Take Profit Levels (ALL THREE REQUIRED):**
-- TP1: Minimum 25 pips (conservative target)
-- TP2: Minimum 50 pips (standard target)
-- TP3: Minimum 75 pips (extended target)
+**CRITICAL: Pip ranges differ significantly between instruments!**
+30 pips on EUR/USD ≠ 30 pips on Gold. Use the correct ranges below:
 
-**Risk/Reward:**
+### Standard Currency Pairs (EUR/USD, GBP/USD, AUD/USD, etc.)
+- **1 pip = 0.0001** (4th decimal)
+- SL: 20-50 pips (0.0020-0.0050 move)
+- TP1: 25+ pips, TP2: 50+ pips, TP3: 75+ pips
+
+### JPY Pairs (USD/JPY, EUR/JPY, GBP/JPY, etc.)
+- **1 pip = 0.01** (2nd decimal)
+- SL: 20-50 pips (0.20-0.50 move)
+- TP1: 25+ pips, TP2: 50+ pips, TP3: 75+ pips
+
+### Gold (XAU/USD) - MUCH LARGER PIP COUNTS!
+- **1 pip = $0.01** (2nd decimal)
+- SL: 300-800 pips ($3.00-$8.00 move)
+- TP1: 500+ pips ($5.00), TP2: 1000+ pips ($10.00), TP3: 1500+ pips ($15.00)
+- Example: Entry $2050.00, SL $2045.00 = 500 pips, TP1 $2055.00 = 500 pips
+
+### Silver (XAG/USD)
+- **1 pip = $0.01** (2nd decimal)
+- SL: 30-80 pips ($0.30-$0.80 move)
+- TP1: 50+ pips ($0.50), TP2: 100+ pips ($1.00), TP3: 150+ pips ($1.50)
+
+### Oil (XTI/USD, XBR/USD)
+- **1 pip = $0.01** (2nd decimal)
+- SL: 30-80 pips ($0.30-$0.80 move)
+- TP1: 50+ pips ($0.50), TP2: 100+ pips ($1.00), TP3: 150+ pips ($1.50)
+
+**Risk/Reward (applies to ALL instruments):**
 - TP1 must provide minimum 1:1 R:R
 - TP2 must provide minimum 2:1 R:R
 - TP3 must provide minimum 3:1 R:R
@@ -624,41 +644,48 @@ Price Direction Rules:
 - LONG/BUY: entry_price > stop_loss AND entry_price < take_profits (SL below, TPs above)
 - SHORT/SELL: entry_price < stop_loss AND entry_price > take_profits (SL above, TPs below)
 
+CRITICAL - PIP RANGES BY INSTRUMENT (30 pips EUR/USD ≠ 30 pips Gold!):
+- Standard pairs (EUR/USD): SL 20-50 pips, TP1 25+, TP2 50+, TP3 75+
+- JPY pairs: SL 20-50 pips, TP1 25+, TP2 50+, TP3 75+
+- GOLD (XAU/USD): SL 300-800 pips ($3-8), TP1 500+ ($5), TP2 1000+ ($10), TP3 1500+ ($15)
+- Silver (XAG/USD): SL 30-80 pips, TP1 50+, TP2 100+, TP3 150+
+- Oil (XTI/USD): SL 30-80 pips, TP1 50+, TP2 100+, TP3 150+
+
 {
-  "symbol": "EUR/USD",
+  "symbol": "EUR/USD or XAU/USD",
   "analysis_type": "forex",
   "recommendation": "strong_buy|buy|hold|sell|strong_sell|wait",
   "confidence": 0-100,
-  "current_price": number (REQUIRED - actual mid price from get_forex_quote, e.g., 1.08523),
+  "current_price": number (REQUIRED - actual mid price from get_forex_quote),
   "reasoning": "detailed explanation",
   "key_factors": [{"factor": "...", "sentiment": "bullish|bearish|neutral", "weight": 0-100, "source": "..."}],
   "risks": ["risk1", "risk2"],
   "forex_setup": {
     "trade": {
-      "pair": "EUR/USD",
+      "pair": "EUR/USD or XAU/USD",
       "current_price": number (SAME as above - actual market price),
       "direction": "long|short",
-      "entry_price": number (5 decimals - must be a REAL price near current_price),
+      "entry_price": number (must be a REAL price near current_price),
       "position_size_suggestion": "0.5-1% risk per trade"
     },
     "levels": {
       "stop_loss": {
-        "price": number (5 decimals - BELOW entry for LONG, ABOVE entry for SHORT),
-        "pips": number (minimum 20, maximum 50)
+        "price": number (BELOW entry for LONG, ABOVE entry for SHORT),
+        "pips": number (see ranges above - Gold needs 300-800, forex needs 20-50)
       },
       "take_profit_1": {
-        "price": number (5 decimals - ABOVE entry for LONG, BELOW entry for SHORT),
-        "pips": number (minimum 25),
+        "price": number (ABOVE entry for LONG, BELOW entry for SHORT),
+        "pips": number (see ranges above),
         "risk_reward": number (minimum 1.0)
       },
       "take_profit_2": {
-        "price": number (5 decimals - ABOVE entry for LONG, BELOW entry for SHORT),
-        "pips": number (minimum 50),
+        "price": number (ABOVE entry for LONG, BELOW entry for SHORT),
+        "pips": number (see ranges above),
         "risk_reward": number (minimum 2.0)
       },
       "take_profit_3": {
-        "price": number (5 decimals - ABOVE entry for LONG, BELOW entry for SHORT),
-        "pips": number (minimum 75),
+        "price": number (ABOVE entry for LONG, BELOW entry for SHORT),
+        "pips": number (see ranges above),
         "risk_reward": number (minimum 3.0)
       },
       "key_support": [number, number],

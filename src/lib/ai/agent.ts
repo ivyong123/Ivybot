@@ -590,38 +590,47 @@ function parseForexSetup(raw: Record<string, unknown>, symbol: string): TradeRec
   const support1 = Number((levels?.key_support as number[])?.[0] || 0);
   const resistance1 = Number((levels?.key_resistance as number[])?.[0] || 0);
 
-  // Determine pip multiplier and min valid price based on instrument type
+  // Determine pip multiplier, min valid price, and default pip ranges based on instrument type
+  // Sources: Myfxbook, Babypips, FXTM pip calculators
   const upperSymbol = symbol.toUpperCase();
   const isJPY = upperSymbol.includes('JPY');
   const isGold = upperSymbol.includes('XAU');
   const isSilver = upperSymbol.includes('XAG');
   const isOil = upperSymbol.includes('XTI') || upperSymbol.includes('XBR') || upperSymbol.includes('OIL');
 
-  // Pip multipliers:
-  // - Standard pairs (EUR/USD, GBP/USD): 10000 (e.g., 1.08523 - 5 decimals, pip = 0.0001)
-  // - JPY pairs (USD/JPY): 100 (e.g., 149.234 - 3 decimals, pip = 0.01)
-  // - Gold (XAU/USD): 100 (e.g., 2048.50 - 2 decimals, pip = 0.01)
-  // - Silver (XAG/USD): 1000 (e.g., 23.456 - 3 decimals, pip = 0.001)
-  // - Oil (XTI/USD): 100 (e.g., 78.50 - 2 decimals, pip = 0.01)
+  // Pip multipliers (1 pip = price movement):
+  // - Standard pairs (EUR/USD, GBP/USD): 1 pip = 0.0001 (5 decimals)
+  // - JPY pairs (USD/JPY): 1 pip = 0.01 (3 decimals)
+  // - Gold (XAU/USD): 1 pip = 0.01 (2 decimals) - but typical moves are 100-500+ pips
+  // - Silver (XAG/USD): 1 pip = 0.01 (2 decimals)
+  // - Oil (XTI/USD): 1 pip = 0.01 (2 decimals)
   let pipMultiplier: number;
   let minValidPrice: number;
+  let instrumentType: 'standard' | 'jpy' | 'gold' | 'silver' | 'oil';
 
   if (isGold) {
-    pipMultiplier = 100; // Gold uses 2 decimal places
-    minValidPrice = 1000; // Gold prices are typically 1500-2500
+    pipMultiplier = 100; // 1 pip = $0.01 movement
+    minValidPrice = 1000; // Gold prices are typically 1800-2500
+    instrumentType = 'gold';
   } else if (isSilver) {
-    pipMultiplier = 1000; // Silver uses 3 decimal places
-    minValidPrice = 10; // Silver prices are typically 15-35
+    pipMultiplier = 100; // 1 pip = $0.01 movement (same as gold)
+    minValidPrice = 10; // Silver prices are typically 20-35
+    instrumentType = 'silver';
   } else if (isOil) {
-    pipMultiplier = 100; // Oil uses 2 decimal places
-    minValidPrice = 30; // Oil prices are typically 50-150
+    pipMultiplier = 100; // 1 pip = $0.01 movement
+    minValidPrice = 30; // Oil prices are typically 50-120
+    instrumentType = 'oil';
   } else if (isJPY) {
-    pipMultiplier = 100; // JPY pairs use 3 decimal places
+    pipMultiplier = 100; // 1 pip = 0.01 yen movement
     minValidPrice = 50; // JPY pairs are typically 100-200
+    instrumentType = 'jpy';
   } else {
-    pipMultiplier = 10000; // Standard pairs use 5 decimal places
+    pipMultiplier = 10000; // 1 pip = 0.0001 movement
     minValidPrice = 0.1; // Standard pairs are typically 0.5-2.0
+    instrumentType = 'standard';
   }
+
+  console.log(`[Agent] Instrument: ${upperSymbol}, Type: ${instrumentType}, Pip Multiplier: ${pipMultiplier}`);
 
   // Entry price MUST be provided by the AI - no fallbacks
   // We only use current price for display, NOT for fabricating entries
@@ -645,11 +654,51 @@ function parseForexSetup(raw: Record<string, unknown>, symbol: string): TradeRec
   const direction = (trade?.direction || raw.direction || 'long') as string;
   const isLong = direction.toLowerCase() === 'long' || direction.toLowerCase() === 'buy';
 
-  // Default pip values for forex
-  const DEFAULT_SL_PIPS = 25;
-  const DEFAULT_TP1_PIPS = 25;
-  const DEFAULT_TP2_PIPS = 50;
-  const DEFAULT_TP3_PIPS = 75;
+  // Default pip values vary by instrument type
+  // Gold/Silver/Oil use 0.01 pips, so need larger pip counts for equivalent % moves
+  // Standard forex: 25 pips = 0.25% move on EUR/USD at 1.0000
+  // Gold: 500 pips = $5.00 move = 0.25% on gold at $2000
+  let DEFAULT_SL_PIPS: number;
+  let DEFAULT_TP1_PIPS: number;
+  let DEFAULT_TP2_PIPS: number;
+  let DEFAULT_TP3_PIPS: number;
+
+  switch (instrumentType) {
+    case 'gold':
+      // Gold: typical SL 300-800 pips ($3-8), TP 500-2000 pips ($5-20)
+      DEFAULT_SL_PIPS = 500;   // $5.00 move
+      DEFAULT_TP1_PIPS = 500;  // $5.00 = 1:1 R:R
+      DEFAULT_TP2_PIPS = 1000; // $10.00 = 2:1 R:R
+      DEFAULT_TP3_PIPS = 1500; // $15.00 = 3:1 R:R
+      break;
+    case 'silver':
+      // Silver: typical SL 30-80 pips ($0.30-0.80), TP 50-200 pips ($0.50-2.00)
+      DEFAULT_SL_PIPS = 50;    // $0.50 move
+      DEFAULT_TP1_PIPS = 50;   // $0.50 = 1:1 R:R
+      DEFAULT_TP2_PIPS = 100;  // $1.00 = 2:1 R:R
+      DEFAULT_TP3_PIPS = 150;  // $1.50 = 3:1 R:R
+      break;
+    case 'oil':
+      // Oil: typical SL 30-80 pips ($0.30-0.80), TP 50-200 pips ($0.50-2.00)
+      DEFAULT_SL_PIPS = 50;    // $0.50 move
+      DEFAULT_TP1_PIPS = 50;   // $0.50 = 1:1 R:R
+      DEFAULT_TP2_PIPS = 100;  // $1.00 = 2:1 R:R
+      DEFAULT_TP3_PIPS = 150;  // $1.50 = 3:1 R:R
+      break;
+    case 'jpy':
+      // JPY pairs: similar to standard but using 0.01 pip
+      DEFAULT_SL_PIPS = 25;
+      DEFAULT_TP1_PIPS = 25;
+      DEFAULT_TP2_PIPS = 50;
+      DEFAULT_TP3_PIPS = 75;
+      break;
+    default: // 'standard'
+      // Standard forex pairs (EUR/USD, GBP/USD, etc.)
+      DEFAULT_SL_PIPS = 25;
+      DEFAULT_TP1_PIPS = 25;
+      DEFAULT_TP2_PIPS = 50;
+      DEFAULT_TP3_PIPS = 75;
+  }
 
   // CRITICAL: Validate and fix direction of SL and TPs
   // For LONG/BUY: SL should be BELOW entry, TPs should be ABOVE entry
