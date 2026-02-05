@@ -578,12 +578,12 @@ function parseForexSetup(raw: Record<string, unknown>, symbol: string): TradeRec
   // Get current price (market price) - different from entry price
   const currentPrice = Number(raw.current_price || trade?.current_price || 0);
 
-  // Calculate pip values if we have entry and SL
+  // Get raw values from AI
   const entryPrice = Number(trade?.entry_price || raw.entry_price || 0);
-  const stopLossPrice = Number(getNestedValue(levels, 'stop_loss') || trade?.stop_loss || raw.stop_loss_price || 0);
-  const tp1Price = Number(getNestedValue(levels, 'take_profit_1') || trade?.take_profit_1 || raw.take_profit_price || 0);
-  const tp2Price = Number(getNestedValue(levels, 'take_profit_2') || trade?.take_profit_2 || 0);
-  const tp3Price = Number(getNestedValue(levels, 'take_profit_3') || trade?.take_profit_3 || 0);
+  const rawStopLoss = Number(getNestedValue(levels, 'stop_loss') || trade?.stop_loss || raw.stop_loss_price || 0);
+  const rawTp1 = Number(getNestedValue(levels, 'take_profit_1') || trade?.take_profit_1 || raw.take_profit_price || 0);
+  const rawTp2 = Number(getNestedValue(levels, 'take_profit_2') || trade?.take_profit_2 || 0);
+  const rawTp3 = Number(getNestedValue(levels, 'take_profit_3') || trade?.take_profit_3 || 0);
 
   // Determine pip multiplier (JPY pairs use 100, others use 10000)
   const isJPY = symbol.toUpperCase().includes('JPY');
@@ -592,11 +592,63 @@ function parseForexSetup(raw: Record<string, unknown>, symbol: string): TradeRec
   const direction = (trade?.direction || raw.direction || 'long') as string;
   const isLong = direction.toLowerCase() === 'long' || direction.toLowerCase() === 'buy';
 
-  // Calculate pip distances
+  // Default pip values for forex
+  const DEFAULT_SL_PIPS = 25;
+  const DEFAULT_TP1_PIPS = 25;
+  const DEFAULT_TP2_PIPS = 50;
+  const DEFAULT_TP3_PIPS = 75;
+
+  // CRITICAL: Validate and fix direction of SL and TPs
+  // For LONG/BUY: SL should be BELOW entry, TPs should be ABOVE entry
+  // For SHORT/SELL: SL should be ABOVE entry, TPs should be BELOW entry
+  let stopLossPrice: number;
+  let tp1Price: number;
+  let tp2Price: number;
+  let tp3Price: number;
+
+  if (isLong) {
+    // LONG: SL below entry, TPs above entry
+    const slValid = rawStopLoss > 0 && rawStopLoss < entryPrice;
+    const tp1Valid = rawTp1 > 0 && rawTp1 > entryPrice;
+    const tp2Valid = rawTp2 > 0 && rawTp2 > entryPrice;
+    const tp3Valid = rawTp3 > 0 && rawTp3 > entryPrice;
+
+    // Calculate pip distances from valid values or use defaults
+    const slPips = slValid ? Math.abs((entryPrice - rawStopLoss) * pipMultiplier) : DEFAULT_SL_PIPS;
+    const tp1Pips = tp1Valid ? Math.abs((rawTp1 - entryPrice) * pipMultiplier) : DEFAULT_TP1_PIPS;
+    const tp2Pips = tp2Valid ? Math.abs((rawTp2 - entryPrice) * pipMultiplier) : DEFAULT_TP2_PIPS;
+    const tp3Pips = tp3Valid ? Math.abs((rawTp3 - entryPrice) * pipMultiplier) : DEFAULT_TP3_PIPS;
+
+    // Set correct prices (LONG: SL below, TPs above)
+    stopLossPrice = slValid ? rawStopLoss : entryPrice - (slPips / pipMultiplier);
+    tp1Price = tp1Valid ? rawTp1 : entryPrice + (tp1Pips / pipMultiplier);
+    tp2Price = tp2Valid ? rawTp2 : entryPrice + (tp2Pips / pipMultiplier);
+    tp3Price = tp3Valid ? rawTp3 : entryPrice + (tp3Pips / pipMultiplier);
+  } else {
+    // SHORT: SL above entry, TPs below entry
+    const slValid = rawStopLoss > 0 && rawStopLoss > entryPrice;
+    const tp1Valid = rawTp1 > 0 && rawTp1 < entryPrice;
+    const tp2Valid = rawTp2 > 0 && rawTp2 < entryPrice;
+    const tp3Valid = rawTp3 > 0 && rawTp3 < entryPrice;
+
+    // Calculate pip distances from valid values or use defaults
+    const slPips = slValid ? Math.abs((rawStopLoss - entryPrice) * pipMultiplier) : DEFAULT_SL_PIPS;
+    const tp1Pips = tp1Valid ? Math.abs((entryPrice - rawTp1) * pipMultiplier) : DEFAULT_TP1_PIPS;
+    const tp2Pips = tp2Valid ? Math.abs((entryPrice - rawTp2) * pipMultiplier) : DEFAULT_TP2_PIPS;
+    const tp3Pips = tp3Valid ? Math.abs((entryPrice - rawTp3) * pipMultiplier) : DEFAULT_TP3_PIPS;
+
+    // Set correct prices (SHORT: SL above, TPs below)
+    stopLossPrice = slValid ? rawStopLoss : entryPrice + (slPips / pipMultiplier);
+    tp1Price = tp1Valid ? rawTp1 : entryPrice - (tp1Pips / pipMultiplier);
+    tp2Price = tp2Valid ? rawTp2 : entryPrice - (tp2Pips / pipMultiplier);
+    tp3Price = tp3Valid ? rawTp3 : entryPrice - (tp3Pips / pipMultiplier);
+  }
+
+  // Calculate final pip distances (now guaranteed correct direction)
   const slPips = Math.abs((entryPrice - stopLossPrice) * pipMultiplier);
   const tp1Pips = Math.abs((tp1Price - entryPrice) * pipMultiplier);
-  const tp2Pips = tp2Price ? Math.abs((tp2Price - entryPrice) * pipMultiplier) : tp1Pips * 2;
-  const tp3Pips = tp3Price ? Math.abs((tp3Price - entryPrice) * pipMultiplier) : tp1Pips * 3;
+  const tp2Pips = Math.abs((tp2Price - entryPrice) * pipMultiplier);
+  const tp3Pips = Math.abs((tp3Price - entryPrice) * pipMultiplier);
 
   // Determine order type based on entry vs current price
   // BUY: entry < current = BUY LIMIT (waiting for pullback), entry > current = BUY STOP (breakout)
@@ -610,8 +662,8 @@ function parseForexSetup(raw: Record<string, unknown>, symbol: string): TradeRec
     orderType = entryPrice > priceToUse ? 'SELL_LIMIT' : entryPrice < priceToUse ? 'SELL_STOP' : 'MARKET';
   }
 
-  // Determine action based on order type
-  const action = orderType.startsWith('BUY') ? 'BUY' : 'SELL';
+  // Determine action based on direction
+  const action = isLong ? 'BUY' : 'SELL';
 
   return {
     pair: String(trade?.pair || raw.pair || symbol),
@@ -623,9 +675,9 @@ function parseForexSetup(raw: Record<string, unknown>, symbol: string): TradeRec
       orderType: orderType as 'LIMIT' | 'MARKET' | 'BUY_LIMIT' | 'BUY_STOP' | 'SELL_LIMIT' | 'SELL_STOP',
       entryPrice,
       stopLoss: stopLossPrice,
-      takeProfit1: tp1Price || entryPrice + (isLong ? tp1Pips : -tp1Pips) / pipMultiplier,
-      takeProfit2: tp2Price || entryPrice + (isLong ? tp2Pips : -tp2Pips) / pipMultiplier,
-      takeProfit3: tp3Price || entryPrice + (isLong ? tp3Pips : -tp3Pips) / pipMultiplier,
+      takeProfit1: tp1Price,
+      takeProfit2: tp2Price,
+      takeProfit3: tp3Price,
       stopLossPips: Math.round(slPips),
       takeProfit1Pips: Math.round(tp1Pips),
       takeProfit2Pips: Math.round(tp2Pips),
