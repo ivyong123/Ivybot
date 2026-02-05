@@ -164,9 +164,17 @@ const recommendationConfig = {
 };
 
 export function StrategyResults({ recommendation, jobId }: StrategyResultsProps) {
-  const config = recommendationConfig[recommendation.recommendation];
-  const bullishFactors = recommendation.key_factors.filter((f) => f.sentiment === 'bullish');
-  const bearishFactors = recommendation.key_factors.filter((f) => f.sentiment === 'bearish');
+  // Defensive: ensure recommendation type is valid, default to 'hold'
+  const recType = recommendation.recommendation in recommendationConfig
+    ? recommendation.recommendation
+    : 'hold';
+  const config = recommendationConfig[recType];
+
+  // Defensive: ensure key_factors is an array
+  const keyFactors = Array.isArray(recommendation.key_factors) ? recommendation.key_factors : [];
+  const bullishFactors = keyFactors.filter((f) => f.sentiment === 'bullish');
+  const bearishFactors = keyFactors.filter((f) => f.sentiment === 'bearish');
+
   const isForex = recommendation.analysis_type === 'forex';
   const currencyPrefix = getCurrencyPrefix(recommendation.symbol, isForex);
 
@@ -340,7 +348,7 @@ export function StrategyResults({ recommendation, jobId }: StrategyResultsProps)
       </div>
 
       {/* Risks */}
-      {recommendation.risks.length > 0 && (
+      {Array.isArray(recommendation.risks) && recommendation.risks.length > 0 && (
         <div className="glass-card p-6 border-red-500/20">
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 rounded-lg bg-amber-500/10">
@@ -708,7 +716,7 @@ export function StrategyResults({ recommendation, jobId }: StrategyResultsProps)
       <div className="glass-card p-6">
         <h3 className="font-semibold mb-4">Data Sources</h3>
         <div className="flex flex-wrap gap-2">
-          {recommendation.data_sources.map((source, index) => (
+          {Array.isArray(recommendation.data_sources) && recommendation.data_sources.map((source, index) => (
             <Badge
               key={index}
               variant="secondary"
@@ -717,9 +725,12 @@ export function StrategyResults({ recommendation, jobId }: StrategyResultsProps)
               {source}
             </Badge>
           ))}
+          {(!recommendation.data_sources || recommendation.data_sources.length === 0) && (
+            <span className="text-sm text-muted-foreground">No data sources recorded</span>
+          )}
         </div>
         <p className="text-xs text-muted-foreground mt-4">
-          Generated at {new Date(recommendation.generated_at).toLocaleString()}
+          Generated at {recommendation.generated_at ? new Date(recommendation.generated_at).toLocaleString() : 'Unknown'}
         </p>
       </div>
     </div>
