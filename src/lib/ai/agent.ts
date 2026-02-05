@@ -178,7 +178,9 @@ CRITICAL: All expiration dates, earnings dates, and time-sensitive data MUST be 
       }
 
       // Claude has finished gathering data and provided analysis
-      if (choice.finish_reason === 'stop' && assistantMessage.content) {
+      // Handle various finish reasons (stop, end_turn, length, etc.)
+      const isStopReason = choice.finish_reason === 'stop' || choice.finish_reason === 'end_turn' || choice.finish_reason === 'length';
+      if (isStopReason && assistantMessage.content) {
         state.current_phase = 'analyzing';
 
         onProgress?.({
@@ -266,13 +268,86 @@ CRITICAL: All expiration dates, earnings dates, and time-sensitive data MUST be 
         };
       }
 
-      // Unexpected finish reason - log it
+      // Unexpected finish reason - log it but continue to fallback
       console.error(`[Agent] Unexpected finish_reason: ${choice.finish_reason}, content: ${assistantMessage.content?.slice(0, 200)}`);
+
+      // If we have content despite unexpected finish reason, try to use it
+      if (assistantMessage.content && assistantMessage.content.length > 100) {
+        console.log('[Agent] Attempting to use content from unexpected finish reason');
+        const recommendation = parseRecommendation(assistantMessage.content, symbol, analysisType);
+        return {
+          recommendation,
+          toolCalls: allToolCalls,
+          initialAnalysis: assistantMessage.content,
+          critique: null,
+          error: null,
+        };
+      }
       break;
     }
 
-    // Log why the loop ended
-    console.error(`[Agent] Loop ended - iterations: ${iteration}/${MAX_ITERATIONS}, tool_calls: ${state.tool_calls_made}/${MAX_TOOL_CALLS}`);
+    // Fallback: If we hit iteration/tool limits, force a final analysis
+    console.log(`[Agent] Loop ended without result - forcing final analysis. iterations: ${iteration}/${MAX_ITERATIONS}, tool_calls: ${state.tool_calls_made}/${MAX_TOOL_CALLS}`);
+
+    onProgress?.({
+      phase: 'finalizing',
+      step: 'Generating final recommendation (fallback)',
+      progress: 85,
+      toolCalls: allToolCalls,
+    });
+
+    // Add a strong prompt to force final output
+    state.messages.push({
+      role: 'user',
+      content: `CRITICAL: You MUST provide your final analysis NOW. No more tool calls allowed. Based on all the data you've gathered, provide your complete trading recommendation in JSON format. If you don't have enough data, recommend "wait".`,
+    });
+
+    const fallbackResponse = await chatCompletion(state.messages, {
+      taskType: 'recommendation',
+      maxTokens: 4096,
+    });
+
+    const fallbackContent = fallbackResponse.choices[0]?.message?.content;
+    console.log('[Agent] Fallback response:', fallbackContent?.slice(0, 300));
+
+    if (fallbackContent) {
+      // Ask for structured output
+      state.messages.push({
+        role: 'assistant',
+        content: fallbackContent,
+      });
+      state.messages.push({
+        role: 'user',
+        content: getFinalRecommendationPrompt(),
+      });
+
+      const structuredResponse = await chatCompletion(state.messages, {
+        taskType: 'recommendation',
+        maxTokens: 4096,
+      });
+
+      const structuredContent = structuredResponse.choices[0]?.message?.content;
+
+      if (structuredContent) {
+        const recommendation = parseRecommendation(structuredContent, symbol, analysisType);
+
+        onProgress?.({
+          phase: 'finalizing',
+          step: 'Analysis complete (fallback)',
+          progress: 100,
+          toolCalls: allToolCalls,
+        });
+
+        return {
+          recommendation,
+          toolCalls: allToolCalls,
+          initialAnalysis: fallbackContent,
+          critique: null,
+          error: null,
+        };
+      }
+    }
+
     throw new Error(`Analysis loop ended without producing a result (iterations: ${iteration}, tool_calls: ${state.tool_calls_made})`);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
