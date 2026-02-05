@@ -42,7 +42,7 @@ export default function HelpPage() {
 
       {/* Content */}
       <div className="container py-8 max-w-4xl">
-        <article className="prose prose-invert max-w-none">
+        <article className="prose dark:prose-invert max-w-none">
           <h1 className="gradient-text">CheekyTrader AI - User Guide</h1>
           <p className="lead text-muted-foreground">
             A comprehensive guide to using CheekyTrader AI for stock options and forex trading analysis.
