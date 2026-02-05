@@ -89,7 +89,12 @@ interface StrategyResultsProps {
 }
 
 // Helper to format prices with proper precision
-function formatPrice(price: number, symbol: string, isForex: boolean = false): string {
+function formatPrice(price: number | null | undefined, symbol: string, isForex: boolean = false): string {
+  // Handle null/undefined
+  if (price == null || isNaN(price)) {
+    return 'N/A';
+  }
+
   // Check if it's a forex pair
   if (isForex || symbol.includes('/')) {
     // JPY pairs use 3 decimal places, others use 5
@@ -526,17 +531,17 @@ export function StrategyResults({ recommendation, jobId }: StrategyResultsProps)
                 <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-center">
                   <p className="text-xs text-muted-foreground mb-1">Stop Loss</p>
                   <p className="text-lg font-bold font-mono text-red-500">{formatPrice(recommendation.forex_setup.trade.stopLoss, recommendation.forex_setup.pair, true)}</p>
-                  <p className="text-xs text-red-400">{recommendation.forex_setup.trade.stopLossPips.toFixed(1)} pips</p>
+                  <p className="text-xs text-red-400">{recommendation.forex_setup.trade.stopLossPips?.toFixed(1) ?? '0'} pips</p>
                 </div>
                 <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center">
                   <p className="text-xs text-muted-foreground mb-1">TP1</p>
                   <p className="text-lg font-bold font-mono text-emerald-500">{formatPrice(recommendation.forex_setup.trade.takeProfit1, recommendation.forex_setup.pair, true)}</p>
-                  <p className="text-xs text-emerald-400">{recommendation.forex_setup.trade.takeProfit1Pips.toFixed(1)} pips</p>
+                  <p className="text-xs text-emerald-400">{recommendation.forex_setup.trade.takeProfit1Pips?.toFixed(1) ?? '0'} pips</p>
                 </div>
                 <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center">
                   <p className="text-xs text-muted-foreground mb-1">TP2</p>
                   <p className="text-lg font-bold font-mono text-emerald-500">{formatPrice(recommendation.forex_setup.trade.takeProfit2, recommendation.forex_setup.pair, true)}</p>
-                  <p className="text-xs text-emerald-400">{recommendation.forex_setup.trade.takeProfit2Pips.toFixed(1)} pips</p>
+                  <p className="text-xs text-emerald-400">{recommendation.forex_setup.trade.takeProfit2Pips?.toFixed(1) ?? '0'} pips</p>
                 </div>
               </div>
 
@@ -545,7 +550,7 @@ export function StrategyResults({ recommendation, jobId }: StrategyResultsProps)
                 <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center">
                   <p className="text-xs text-muted-foreground mb-1">TP3 (Runner)</p>
                   <p className="text-lg font-bold font-mono text-emerald-500">{formatPrice(recommendation.forex_setup.trade.takeProfit3, recommendation.forex_setup.pair, true)}</p>
-                  <p className="text-xs text-emerald-400">{recommendation.forex_setup.trade.takeProfit3Pips.toFixed(1)} pips</p>
+                  <p className="text-xs text-emerald-400">{recommendation.forex_setup.trade.takeProfit3Pips?.toFixed(1) ?? '0'} pips</p>
                 </div>
                 <div className="p-3 rounded-xl glass-subtle text-center">
                   <p className="text-xs text-muted-foreground mb-1">Risk/Reward</p>
@@ -617,28 +622,28 @@ export function StrategyResults({ recommendation, jobId }: StrategyResultsProps)
                 {recommendation.forex_setup.indicators.rsi && (
                   <div>
                     <span className="text-muted-foreground">RSI:</span>
-                    <span className="ml-2 font-bold">{recommendation.forex_setup.indicators.rsi.value.toFixed(1)}</span>
-                    <p className="text-xs text-muted-foreground">{recommendation.forex_setup.indicators.rsi.interpretation}</p>
+                    <span className="ml-2 font-bold">{recommendation.forex_setup.indicators.rsi.value?.toFixed(1) ?? 'N/A'}</span>
+                    <p className="text-xs text-muted-foreground">{recommendation.forex_setup.indicators.rsi.interpretation || ''}</p>
                   </div>
                 )}
                 {recommendation.forex_setup.indicators.macd && (
                   <div>
                     <span className="text-muted-foreground">MACD:</span>
-                    <span className="ml-2 font-bold">{recommendation.forex_setup.indicators.macd.histogram.toFixed(5)}</span>
-                    <p className="text-xs text-muted-foreground">{recommendation.forex_setup.indicators.macd.interpretation}</p>
+                    <span className="ml-2 font-bold">{recommendation.forex_setup.indicators.macd.histogram?.toFixed(5) ?? 'N/A'}</span>
+                    <p className="text-xs text-muted-foreground">{recommendation.forex_setup.indicators.macd.interpretation || ''}</p>
                   </div>
                 )}
                 {recommendation.forex_setup.indicators.stochastic && (
                   <div>
                     <span className="text-muted-foreground">Stoch:</span>
-                    <span className="ml-2 font-bold">{recommendation.forex_setup.indicators.stochastic.k.toFixed(1)}/{recommendation.forex_setup.indicators.stochastic.d.toFixed(1)}</span>
-                    <p className="text-xs text-muted-foreground">{recommendation.forex_setup.indicators.stochastic.interpretation}</p>
+                    <span className="ml-2 font-bold">{recommendation.forex_setup.indicators.stochastic.k?.toFixed(1) ?? '0'}/{recommendation.forex_setup.indicators.stochastic.d?.toFixed(1) ?? '0'}</span>
+                    <p className="text-xs text-muted-foreground">{recommendation.forex_setup.indicators.stochastic.interpretation || ''}</p>
                   </div>
                 )}
                 {recommendation.forex_setup.indicators.ema && (
                   <div>
                     <span className="text-muted-foreground">EMAs:</span>
-                    <p className="text-xs text-muted-foreground">{recommendation.forex_setup.indicators.ema.interpretation}</p>
+                    <p className="text-xs text-muted-foreground">{recommendation.forex_setup.indicators.ema.interpretation || ''}</p>
                   </div>
                 )}
               </div>
@@ -678,11 +683,11 @@ export function StrategyResults({ recommendation, jobId }: StrategyResultsProps)
                 <p><span className="text-muted-foreground">Entry:</span> Place {recommendation.forex_setup.trade.action} order at {formatPrice(recommendation.forex_setup.trade.entryPrice, recommendation.forex_setup.pair, true)}</p>
                 <p><span className="text-muted-foreground">Profit Targets:</span></p>
                 <ul className="list-disc list-inside ml-4 text-emerald-400">
-                  <li>TP1: {formatPrice(recommendation.forex_setup.trade.takeProfit1, recommendation.forex_setup.pair, true)} ({recommendation.forex_setup.trade.takeProfit1Pips.toFixed(1)} pips)</li>
-                  <li>TP2: {formatPrice(recommendation.forex_setup.trade.takeProfit2, recommendation.forex_setup.pair, true)} ({recommendation.forex_setup.trade.takeProfit2Pips.toFixed(1)} pips)</li>
-                  <li>TP3: {formatPrice(recommendation.forex_setup.trade.takeProfit3, recommendation.forex_setup.pair, true)} ({recommendation.forex_setup.trade.takeProfit3Pips.toFixed(1)} pips)</li>
+                  <li>TP1: {formatPrice(recommendation.forex_setup.trade.takeProfit1, recommendation.forex_setup.pair, true)} ({recommendation.forex_setup.trade.takeProfit1Pips?.toFixed(1) ?? '0'} pips)</li>
+                  <li>TP2: {formatPrice(recommendation.forex_setup.trade.takeProfit2, recommendation.forex_setup.pair, true)} ({recommendation.forex_setup.trade.takeProfit2Pips?.toFixed(1) ?? '0'} pips)</li>
+                  <li>TP3: {formatPrice(recommendation.forex_setup.trade.takeProfit3, recommendation.forex_setup.pair, true)} ({recommendation.forex_setup.trade.takeProfit3Pips?.toFixed(1) ?? '0'} pips)</li>
                 </ul>
-                <p><span className="text-muted-foreground">Stop Loss:</span> <span className="text-red-400">{formatPrice(recommendation.forex_setup.trade.stopLoss, recommendation.forex_setup.pair, true)} ({recommendation.forex_setup.trade.stopLossPips.toFixed(1)} pips)</span></p>
+                <p><span className="text-muted-foreground">Stop Loss:</span> <span className="text-red-400">{formatPrice(recommendation.forex_setup.trade.stopLoss, recommendation.forex_setup.pair, true)} ({recommendation.forex_setup.trade.stopLossPips?.toFixed(1) ?? '0'} pips)</span></p>
               </div>
               {recommendation.forex_setup.execution.managementRules && (
                 <div className="mt-2">
