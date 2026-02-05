@@ -442,18 +442,18 @@ export function StrategyResults({ recommendation, jobId }: StrategyResultsProps)
                 </span>
               </div>
             )}
-            {recommendation.options_strategy.breakeven.length > 0 && (
+            {Array.isArray(recommendation.options_strategy.breakeven) && recommendation.options_strategy.breakeven.length > 0 && (
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground">Breakeven:</span>
                 <span className="font-bold font-mono">
-                  ${recommendation.options_strategy.breakeven.map(b => b.toFixed(2)).join(' / $')}
+                  ${recommendation.options_strategy.breakeven.map(b => b?.toFixed(2) ?? '0').join(' / $')}
                 </span>
               </div>
             )}
           </div>
 
           {/* Strategy Legs with Greeks */}
-          {recommendation.options_strategy.legs.length > 0 && (
+          {Array.isArray(recommendation.options_strategy.legs) && recommendation.options_strategy.legs.length > 0 && (
             <div className="space-y-3">
               <p className="text-sm font-medium text-muted-foreground">Strategy Legs</p>
               {recommendation.options_strategy.legs.map((leg, index) => (
