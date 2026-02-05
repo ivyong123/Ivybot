@@ -188,22 +188,42 @@ export async function getUnusualOptionsFlow(symbol: string): Promise<UnusualFlow
   try {
     const enhancedData = await getEnhancedWhaleData(upperSymbol);
 
+    // Extract numeric strikes from topStrikes (format: "CALL $150" -> 150)
+    const numericStrikes = enhancedData.flowAlerts.topStrikes
+      .map(s => {
+        const match = s.match(/\$?([\d.]+)/);
+        return match ? parseFloat(match[1]) : NaN;
+      })
+      .filter(n => !isNaN(n));
+
     // Convert to the expected UnusualFlowSummary format for backward compatibility
     return {
       symbol: upperSymbol,
       flows: [], // Detailed flows not needed, we have enhanced data
       total_call_premium: enhancedData.flowAlerts.callPremium + enhancedData.whaleTrades.callPremium,
       total_put_premium: enhancedData.flowAlerts.putPremium + enhancedData.whaleTrades.putPremium,
-      call_put_ratio: enhancedData.flowAlerts.callPutRatio,
+      call_put_ratio: enhancedData.flowAlerts.callPutRatio || 1,
       overall_sentiment: enhancedData.signals.overallSentiment.includes('BULLISH') ? 'bullish' :
                         enhancedData.signals.overallSentiment.includes('BEARISH') ? 'bearish' : 'neutral',
-      notable_strikes: enhancedData.flowAlerts.topStrikes.map(s => parseFloat(s)),
+      notable_strikes: numericStrikes,
       // Add enhanced data for AI consumption
       enhanced_whale_data: enhancedData,
     } as UnusualFlowSummary & { enhanced_whale_data: EnhancedWhaleData };
   } catch (error) {
     console.error(`[Unusual Whales] Error fetching comprehensive data for ${upperSymbol}:`, error);
-    throw error;
+
+    // Return empty data instead of throwing - allows analysis to continue without whale data
+    return {
+      symbol: upperSymbol,
+      flows: [],
+      total_call_premium: 0,
+      total_put_premium: 0,
+      call_put_ratio: 1,
+      overall_sentiment: 'neutral',
+      notable_strikes: [],
+      enhanced_whale_data: null,
+      error: error instanceof Error ? error.message : 'Failed to fetch whale data',
+    } as UnusualFlowSummary & { enhanced_whale_data: EnhancedWhaleData | null; error?: string };
   }
 }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -66,13 +66,133 @@ function SparklesIcon(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+function AlertIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
+    </svg>
+  );
+}
+
+// Common forex currency codes
+const FOREX_CURRENCIES = [
+  'EUR', 'USD', 'GBP', 'JPY', 'AUD', 'NZD', 'CAD', 'CHF',
+  'HKD', 'SGD', 'SEK', 'DKK', 'NOK', 'MXN', 'ZAR', 'TRY',
+  'CNY', 'CNH', 'INR', 'BRL', 'RUB', 'PLN', 'THB', 'IDR'
+];
+
+// Detect if symbol looks like a forex pair
+function detectSymbolType(symbol: string): 'forex' | 'stock' | 'unknown' {
+  const cleaned = symbol.toUpperCase().trim();
+
+  if (!cleaned) return 'unknown';
+
+  // Check for slash format (EUR/USD)
+  if (cleaned.includes('/')) {
+    const parts = cleaned.split('/');
+    if (parts.length === 2) {
+      const [base, quote] = parts;
+      if (FOREX_CURRENCIES.includes(base) && FOREX_CURRENCIES.includes(quote)) {
+        return 'forex';
+      }
+    }
+    // Has slash but not recognized as forex - could be invalid
+    return 'unknown';
+  }
+
+  // Check for concatenated format (EURUSD, GBPJPY)
+  if (cleaned.length === 6) {
+    const base = cleaned.substring(0, 3);
+    const quote = cleaned.substring(3, 6);
+    if (FOREX_CURRENCIES.includes(base) && FOREX_CURRENCIES.includes(quote)) {
+      return 'forex';
+    }
+  }
+
+  // Check for common forex patterns with numbers (EUR/USD often typed as EURUSD)
+  for (const currency of FOREX_CURRENCIES) {
+    if (cleaned.startsWith(currency) && cleaned.length >= 6) {
+      const possibleQuote = cleaned.substring(3, 6);
+      if (FOREX_CURRENCIES.includes(possibleQuote)) {
+        return 'forex';
+      }
+    }
+  }
+
+  // Stock tickers are typically 1-5 characters, all letters
+  if (/^[A-Z]{1,5}$/.test(cleaned)) {
+    return 'stock';
+  }
+
+  // Could be either
+  return 'unknown';
+}
+
+// Get validation warning message
+function getValidationWarning(
+  symbol: string,
+  analysisType: AnalysisType,
+  detectedType: 'forex' | 'stock' | 'unknown'
+): { message: string; suggestion: string } | null {
+  // Only validate for stock and forex analysis types
+  if (analysisType !== 'stock' && analysisType !== 'forex') {
+    return null;
+  }
+
+  // If we can't detect the type, no warning
+  if (detectedType === 'unknown') {
+    return null;
+  }
+
+  // Check for mismatch
+  if (analysisType === 'stock' && detectedType === 'forex') {
+    return {
+      message: `"${symbol}" looks like a forex pair, but you selected Stock Analysis.`,
+      suggestion: 'Switch to Forex Analysis for currency pairs, or enter a stock ticker like AAPL, TSLA, etc.',
+    };
+  }
+
+  if (analysisType === 'forex' && detectedType === 'stock') {
+    return {
+      message: `"${symbol}" looks like a stock ticker, but you selected Forex Analysis.`,
+      suggestion: 'Switch to Stock Analysis for stocks, or enter a forex pair like EUR/USD, GBP/JPY, etc.',
+    };
+  }
+
+  return null;
+}
+
 export function TickerInput({ analysisType, onSubmit, isLoading }: TickerInputProps) {
   const [symbol, setSymbol] = useState('');
   const [context, setContext] = useState('');
   const [isFocused, setIsFocused] = useState(false);
 
+  // Detect symbol type and check for mismatches
+  const detectedType = useMemo(() => detectSymbolType(symbol), [symbol]);
+  const validationWarning = useMemo(
+    () => getValidationWarning(symbol, analysisType, detectedType),
+    [symbol, analysisType, detectedType]
+  );
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Don't submit if there's a validation warning
+    if (validationWarning) {
+      return;
+    }
+
     if (symbol.trim()) {
       onSubmit(symbol.trim().toUpperCase(), context.trim() || undefined);
     }
@@ -106,10 +226,26 @@ export function TickerInput({ analysisType, onSubmit, isLoading }: TickerInputPr
             disabled={isLoading}
             className={`pl-12 pr-4 py-6 text-xl font-mono rounded-xl glass-subtle border-border/50
               focus:border-primary focus:glow-primary transition-all
-              ${isFocused ? 'glow-primary' : ''}`}
+              ${isFocused ? 'glow-primary' : ''}
+              ${validationWarning ? 'border-amber-500 focus:border-amber-500' : ''}`}
             maxLength={10}
           />
         </div>
+
+        {/* Validation Warning */}
+        {validationWarning && (
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30">
+            <AlertIcon className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-amber-500">
+                {validationWarning.message}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {validationWarning.suggestion}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Popular Tickers */}
         <div className="flex flex-wrap gap-2">
@@ -149,7 +285,7 @@ export function TickerInput({ analysisType, onSubmit, isLoading }: TickerInputPr
       {/* Submit Button */}
       <Button
         type="submit"
-        disabled={!symbol.trim() || isLoading}
+        disabled={!symbol.trim() || isLoading || !!validationWarning}
         className="w-full py-6 text-lg font-semibold rounded-xl
           bg-gradient-to-r from-primary to-primary/90
           hover:from-primary/90 hover:to-primary
