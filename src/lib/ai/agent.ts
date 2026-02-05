@@ -178,9 +178,8 @@ CRITICAL: All expiration dates, earnings dates, and time-sensitive data MUST be 
       }
 
       // Claude has finished gathering data and provided analysis
-      // Handle various finish reasons (stop, end_turn, length, etc.)
-      const isStopReason = choice.finish_reason === 'stop' || choice.finish_reason === 'end_turn' || choice.finish_reason === 'length';
-      if (isStopReason && assistantMessage.content) {
+      // If not tool_calls, treat as completion (stop, length, content_filter)
+      if (choice.finish_reason !== 'tool_calls' && assistantMessage.content) {
         state.current_phase = 'analyzing';
 
         onProgress?.({
