@@ -590,12 +590,38 @@ function parseForexSetup(raw: Record<string, unknown>, symbol: string): TradeRec
   const support1 = Number((levels?.key_support as number[])?.[0] || 0);
   const resistance1 = Number((levels?.key_resistance as number[])?.[0] || 0);
 
-  // Determine pip multiplier (JPY pairs use 100, others use 10000)
-  const isJPY = symbol.toUpperCase().includes('JPY');
-  const pipMultiplier = isJPY ? 100 : 10000;
+  // Determine pip multiplier and min valid price based on instrument type
+  const upperSymbol = symbol.toUpperCase();
+  const isJPY = upperSymbol.includes('JPY');
+  const isGold = upperSymbol.includes('XAU');
+  const isSilver = upperSymbol.includes('XAG');
+  const isOil = upperSymbol.includes('XTI') || upperSymbol.includes('XBR') || upperSymbol.includes('OIL');
 
-  // Minimum valid price based on pair type (JPY pairs are around 100-200, others around 0.5-2.0)
-  const minValidPrice = isJPY ? 50 : 0.1;
+  // Pip multipliers:
+  // - Standard pairs (EUR/USD, GBP/USD): 10000 (e.g., 1.08523 - 5 decimals, pip = 0.0001)
+  // - JPY pairs (USD/JPY): 100 (e.g., 149.234 - 3 decimals, pip = 0.01)
+  // - Gold (XAU/USD): 100 (e.g., 2048.50 - 2 decimals, pip = 0.01)
+  // - Silver (XAG/USD): 1000 (e.g., 23.456 - 3 decimals, pip = 0.001)
+  // - Oil (XTI/USD): 100 (e.g., 78.50 - 2 decimals, pip = 0.01)
+  let pipMultiplier: number;
+  let minValidPrice: number;
+
+  if (isGold) {
+    pipMultiplier = 100; // Gold uses 2 decimal places
+    minValidPrice = 1000; // Gold prices are typically 1500-2500
+  } else if (isSilver) {
+    pipMultiplier = 1000; // Silver uses 3 decimal places
+    minValidPrice = 10; // Silver prices are typically 15-35
+  } else if (isOil) {
+    pipMultiplier = 100; // Oil uses 2 decimal places
+    minValidPrice = 30; // Oil prices are typically 50-150
+  } else if (isJPY) {
+    pipMultiplier = 100; // JPY pairs use 3 decimal places
+    minValidPrice = 50; // JPY pairs are typically 100-200
+  } else {
+    pipMultiplier = 10000; // Standard pairs use 5 decimal places
+    minValidPrice = 0.1; // Standard pairs are typically 0.5-2.0
+  }
 
   // Entry price MUST be provided by the AI - no fallbacks
   // We only use current price for display, NOT for fabricating entries

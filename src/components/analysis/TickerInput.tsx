@@ -85,11 +85,21 @@ function AlertIcon(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
-// Common forex currency codes
+// Common forex currency codes and commodity codes
 const FOREX_CURRENCIES = [
+  // Major currencies
   'EUR', 'USD', 'GBP', 'JPY', 'AUD', 'NZD', 'CAD', 'CHF',
+  // Minor currencies
   'HKD', 'SGD', 'SEK', 'DKK', 'NOK', 'MXN', 'ZAR', 'TRY',
-  'CNY', 'CNH', 'INR', 'BRL', 'RUB', 'PLN', 'THB', 'IDR'
+  'CNY', 'CNH', 'INR', 'BRL', 'RUB', 'PLN', 'THB', 'IDR',
+  // Commodities (traded as forex pairs)
+  'XAU', // Gold
+  'XAG', // Silver
+  'XPT', // Platinum
+  'XPD', // Palladium
+  'XBR', // Brent Crude Oil
+  'XTI', // WTI Crude Oil
+  'XNG', // Natural Gas
 ];
 
 // Detect if symbol looks like a forex pair
@@ -202,7 +212,7 @@ export function TickerInput({ analysisType, onSubmit, isLoading }: TickerInputPr
   const label = analysisType === 'forex' ? 'Currency Pair' : 'Ticker Symbol';
 
   const popularTickers = analysisType === 'forex'
-    ? ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD']
+    ? ['EUR/USD', 'GBP/USD', 'USD/JPY', 'XAU/USD', 'XAG/USD']
     : ['AAPL', 'NVDA', 'TSLA', 'SPY', 'AMZN', 'META'];
 
   return (
