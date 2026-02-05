@@ -1,4 +1,4 @@
-import { UnusualOptionsFlow, UnusualFlowSummary } from '@/types/market-data';
+import { UnusualFlowSummary } from '@/types/market-data';
 
 const UW_BASE_URL = 'https://api.unusualwhales.com/api';
 
@@ -35,7 +35,10 @@ async function uwFetch<T>(endpoint: string, params: Record<string, string> = {})
   return response.json();
 }
 
-// Flow Alert response from Unusual Whales API
+// ==========================================
+// TYPE DEFINITIONS
+// ==========================================
+
 interface UWFlowAlert {
   alert_rule: string;
   all_opening_trades: boolean;
@@ -63,130 +66,673 @@ interface UWFlowAlert {
   volume_oi_ratio: string;
 }
 
-interface FlowAlertsResponse {
-  data: UWFlowAlert[];
+interface UWFlowRecent {
+  call_premium: string;
+  put_premium: string;
+  call_volume: number;
+  put_volume: number;
+  expiry: string;
+  date: string;
+  ticker: string;
 }
 
-// Determine sentiment based on flow characteristics
-function determineSentiment(flow: UWFlowAlert): 'bullish' | 'bearish' | 'neutral' {
-  const askPrem = parseFloat(flow.total_ask_side_prem) || 0;
-  const bidPrem = parseFloat(flow.total_bid_side_prem) || 0;
-  const isCall = flow.type === 'call';
-
-  // Ask side = buying, bid side = selling
-  // Buying calls or selling puts = bullish
-  // Buying puts or selling calls = bearish
-  if (askPrem > bidPrem * 1.5) {
-    // Mostly buying
-    return isCall ? 'bullish' : 'bearish';
-  } else if (bidPrem > askPrem * 1.5) {
-    // Mostly selling
-    return isCall ? 'bearish' : 'bullish';
-  }
-
-  return 'neutral';
+interface UWDarkPoolTrade {
+  executed_at: string;
+  ticker: string;
+  price: string;
+  size: number;
+  premium: string;
+  tracking_id: string;
 }
 
-// Get unusual options flow for a symbol
+interface UWWhaleTrade {
+  date: string;
+  ticker: string;
+  strike: string;
+  expiry: string;
+  type: 'call' | 'put';
+  premium: string;
+  size: number;
+  is_sweep: boolean;
+  is_block: boolean;
+  underlying_price: string;
+  sentiment: string;
+}
+
+// ==========================================
+// ENHANCED RESPONSE TYPE
+// ==========================================
+
+export interface EnhancedWhaleData {
+  symbol: string;
+
+  // Date ranges used
+  tradeWindowStart: string;
+  tradeWindowEnd: string;
+  expirationMin: string;
+  expirationMax: string;
+
+  // Summary text for AI
+  summary: string;
+
+  // Whale trades ($100K+ premium)
+  whaleTrades: {
+    count: number;
+    callPremium: number;
+    putPremium: number;
+    sweepCount: number;
+    sentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+    topTrades: Array<{
+      type: string;
+      strike: string;
+      expiry: string;
+      premium: number;
+      isSweep: boolean;
+      tradeAgeDays: number;
+      daysToExpiry: number;
+    }>;
+  };
+
+  // Flow alerts (filtered: 1-10 days old, 3-13 week exp)
+  flowAlerts: {
+    count: number;
+    totalBeforeFilter: number;
+    callPremium: number;
+    putPremium: number;
+    callAlerts: number;
+    putAlerts: number;
+    sweepCount: number;
+    sentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+    topStrikes: string[];
+    callPutRatio: number;
+  };
+
+  // Trade age distribution
+  tradeAgeBuckets: {
+    days1_2: number;
+    days3_5: number;
+    days6_10: number;
+  };
+
+  // Expiration distribution
+  expirationBuckets: {
+    week3_5: number;
+    week6_9: number;
+    week10_13: number;
+  };
+
+  // Dark pool data
+  darkPool: {
+    tradeCount: number;
+    totalVolume: number;
+    totalPremium: number;
+    sentiment: 'ACCUMULATION' | 'DISTRIBUTION' | 'NEUTRAL';
+  };
+
+  // Overall signals
+  signals: {
+    overallSentiment: 'STRONGLY_BULLISH' | 'BULLISH' | 'NEUTRAL' | 'BEARISH' | 'STRONGLY_BEARISH';
+    confidenceScore: number; // 0-100
+    keySignals: string[];
+    warnings: string[];
+  };
+}
+
+// ==========================================
+// MAIN FUNCTION - COMPREHENSIVE WHALE DATA
+// ==========================================
+
 export async function getUnusualOptionsFlow(symbol: string): Promise<UnusualFlowSummary> {
   const upperSymbol = symbol.toUpperCase();
 
   try {
-    // Use the new flow-alerts endpoint with ticker_symbol filter
-    const response = await uwFetch<FlowAlertsResponse>('/option-trades/flow-alerts', {
-      ticker_symbol: upperSymbol,
-    });
+    const enhancedData = await getEnhancedWhaleData(upperSymbol);
 
-    if (!response.data || response.data.length === 0) {
-      console.log(`[Unusual Whales] No flow alerts found for ${upperSymbol}`);
-      return {
-        symbol: upperSymbol,
-        flows: [],
-        total_call_premium: 0,
-        total_put_premium: 0,
-        call_put_ratio: 1,
-        overall_sentiment: 'neutral',
-        notable_strikes: [],
-      };
-    }
-
-    console.log(`[Unusual Whales] Found ${response.data.length} flow alerts for ${upperSymbol}`);
-
-    const flows: UnusualOptionsFlow[] = response.data.map((flow) => {
-      const sentiment = determineSentiment(flow);
-
-      return {
-        symbol: upperSymbol,
-        timestamp: flow.created_at,
-        option_symbol: flow.option_chain,
-        expiration: flow.expiry,
-        strike: parseFloat(flow.strike),
-        option_type: flow.type,
-        sentiment,
-        volume: flow.volume,
-        open_interest: flow.open_interest,
-        volume_oi_ratio: parseFloat(flow.volume_oi_ratio) || 0,
-        premium: parseFloat(flow.total_premium),
-        underlying_price: parseFloat(flow.underlying_price),
-        trade_type: flow.has_sweep ? 'sweep' : (flow.has_multileg ? 'multi_leg' : 'block'),
-      };
-    });
-
-    // Calculate summary statistics
-    let totalCallPremium = 0;
-    let totalPutPremium = 0;
-    let bullishCount = 0;
-    let bearishCount = 0;
-    const strikeMap = new Map<number, number>();
-
-    for (const flow of flows) {
-      const premium = flow.premium || 0;
-
-      if (flow.option_type === 'call') {
-        totalCallPremium += premium;
-      } else {
-        totalPutPremium += premium;
-      }
-
-      if (flow.sentiment === 'bullish') bullishCount++;
-      if (flow.sentiment === 'bearish') bearishCount++;
-
-      // Track notable strikes by premium
-      const currentPremium = strikeMap.get(flow.strike) || 0;
-      strikeMap.set(flow.strike, currentPremium + premium);
-    }
-
-    // Get top 5 strikes by premium
-    const notableStrikes = Array.from(strikeMap.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([strike]) => strike);
-
-    // Determine overall sentiment
-    let overallSentiment: 'bullish' | 'bearish' | 'neutral';
-    const callPutRatio = totalPutPremium > 0 ? totalCallPremium / totalPutPremium : 1;
-
-    if (bullishCount > bearishCount * 1.5 || callPutRatio > 2) {
-      overallSentiment = 'bullish';
-    } else if (bearishCount > bullishCount * 1.5 || callPutRatio < 0.5) {
-      overallSentiment = 'bearish';
-    } else {
-      overallSentiment = 'neutral';
-    }
-
-    console.log(`[Unusual Whales] ${upperSymbol} summary: ${flows.length} flows, sentiment: ${overallSentiment}, call/put ratio: ${callPutRatio.toFixed(2)}`);
-
+    // Convert to the expected UnusualFlowSummary format for backward compatibility
     return {
       symbol: upperSymbol,
-      flows,
-      total_call_premium: totalCallPremium,
-      total_put_premium: totalPutPremium,
-      call_put_ratio: callPutRatio,
-      overall_sentiment: overallSentiment,
-      notable_strikes: notableStrikes,
-    };
+      flows: [], // Detailed flows not needed, we have enhanced data
+      total_call_premium: enhancedData.flowAlerts.callPremium + enhancedData.whaleTrades.callPremium,
+      total_put_premium: enhancedData.flowAlerts.putPremium + enhancedData.whaleTrades.putPremium,
+      call_put_ratio: enhancedData.flowAlerts.callPutRatio,
+      overall_sentiment: enhancedData.signals.overallSentiment.includes('BULLISH') ? 'bullish' :
+                        enhancedData.signals.overallSentiment.includes('BEARISH') ? 'bearish' : 'neutral',
+      notable_strikes: enhancedData.flowAlerts.topStrikes.map(s => parseFloat(s)),
+      // Add enhanced data for AI consumption
+      enhanced_whale_data: enhancedData,
+    } as UnusualFlowSummary & { enhanced_whale_data: EnhancedWhaleData };
   } catch (error) {
-    console.error(`[Unusual Whales] Error fetching flow for ${upperSymbol}:`, error);
+    console.error(`[Unusual Whales] Error fetching comprehensive data for ${upperSymbol}:`, error);
     throw error;
   }
+}
+
+export async function getEnhancedWhaleData(symbol: string): Promise<EnhancedWhaleData> {
+  const upperSymbol = symbol.toUpperCase();
+  const today = new Date();
+
+  // ==========================================
+  // CALCULATE DATE RANGES (matching your n8n logic)
+  // ==========================================
+
+  // TRADE AGE FILTER: 1-10 days old
+  const tenDaysAgo = new Date();
+  tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+
+  // EXPIRATION WINDOW: 3-13 weeks from today
+  const minExpiration = new Date();
+  minExpiration.setDate(minExpiration.getDate() + (3 * 7)); // 21 days
+
+  const maxExpiration = new Date();
+  maxExpiration.setDate(maxExpiration.getDate() + (13 * 7)); // 91 days
+
+  const tenDaysAgoStr = tenDaysAgo.toISOString().split('T')[0];
+  const todayStr = today.toISOString().split('T')[0];
+  const minExpirationStr = minExpiration.toISOString().split('T')[0];
+  const maxExpirationStr = maxExpiration.toISOString().split('T')[0];
+
+  console.log(`[Unusual Whales] Fetching comprehensive data for ${upperSymbol}`);
+  console.log(`[Unusual Whales] Trade Window: ${tenDaysAgoStr} to ${todayStr}`);
+  console.log(`[Unusual Whales] Expiration Window: ${minExpirationStr} to ${maxExpirationStr}`);
+
+  // ==========================================
+  // FETCH ALL DATA IN PARALLEL
+  // ==========================================
+
+  const [alertsResult, flowResult, darkPoolResult, whaleResult] = await Promise.allSettled([
+    // Flow Alerts
+    uwFetch<{ data: UWFlowAlert[] }>(`/stock/${upperSymbol}/flow-alerts`, {
+      limit: '200',
+    }),
+
+    // Flow Recent
+    uwFetch<{ data: UWFlowRecent[] }>(`/stock/${upperSymbol}/flow-recent`, {
+      min_premium: '5000',
+    }),
+
+    // Dark Pool (last 10 days)
+    uwFetch<{ data: UWDarkPoolTrade[] }>(`/darkpool/${upperSymbol}`, {
+      date_from: tenDaysAgoStr,
+      date_to: todayStr,
+      limit: '500',
+    }),
+
+    // Whale Trades ($100K+ premium)
+    uwFetch<{ data: UWWhaleTrade[] }>('/option-trade/full-tape', {
+      ticker: upperSymbol,
+      limit: '200',
+      min_premium: '100000',
+    }),
+  ]);
+
+  // Extract data safely
+  const alertsData = alertsResult.status === 'fulfilled' ? alertsResult.value.data || [] : [];
+  const flowData = flowResult.status === 'fulfilled' ? flowResult.value.data || [] : [];
+  const darkPoolData = darkPoolResult.status === 'fulfilled' ? darkPoolResult.value.data || [] : [];
+  const whaleData = whaleResult.status === 'fulfilled' ? whaleResult.value.data || [] : [];
+
+  console.log(`[Unusual Whales] Fetched - Alerts: ${alertsData.length}, Flow: ${flowData.length}, Dark Pool: ${darkPoolData.length}, Whales: ${whaleData.length}`);
+
+  // ==========================================
+  // FILTER ALERTS: 1-10 days old + 3-13 week expirations
+  // ==========================================
+
+  const filteredAlerts = alertsData.filter(alert => {
+    if (!alert.expiry || !alert.created_at) return false;
+
+    const tradeDate = new Date(alert.created_at);
+    const expiryDate = new Date(alert.expiry);
+
+    const tradeAge = (today.getTime() - tradeDate.getTime()) / (1000 * 60 * 60 * 24);
+    const daysToExpiry = (expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24);
+
+    // Trade must be 1-10 days old AND expiration 3-13 weeks (21-91 days)
+    return (tradeAge >= 0 && tradeAge <= 10) && (daysToExpiry >= 21 && daysToExpiry <= 91);
+  });
+
+  // ==========================================
+  // FILTER WHALE TRADES: same criteria
+  // ==========================================
+
+  const filteredWhales = whaleData.filter(trade => {
+    if (!trade.expiry || !trade.date) return false;
+
+    const tradeDate = new Date(trade.date);
+    const expiryDate = new Date(trade.expiry);
+
+    const tradeAge = (today.getTime() - tradeDate.getTime()) / (1000 * 60 * 60 * 24);
+    const daysToExpiry = (expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24);
+
+    return (tradeAge >= 0 && tradeAge <= 10) && (daysToExpiry >= 21 && daysToExpiry <= 91);
+  });
+
+  console.log(`[Unusual Whales] After filtering - Alerts: ${filteredAlerts.length}/${alertsData.length}, Whales: ${filteredWhales.length}/${whaleData.length}`);
+
+  // ==========================================
+  // CALCULATE METRICS
+  // ==========================================
+
+  // Flow Alerts Metrics
+  const alertCallPremium = filteredAlerts
+    .filter(a => a.type === 'call')
+    .reduce((sum, a) => sum + parseFloat(a.total_premium || '0'), 0);
+
+  const alertPutPremium = filteredAlerts
+    .filter(a => a.type === 'put')
+    .reduce((sum, a) => sum + parseFloat(a.total_premium || '0'), 0);
+
+  const alertCallCount = filteredAlerts.filter(a => a.type === 'call').length;
+  const alertPutCount = filteredAlerts.filter(a => a.type === 'put').length;
+  const alertSweepCount = filteredAlerts.filter(a => a.has_sweep).length;
+
+  // Whale Metrics
+  const whaleCallPremium = filteredWhales
+    .filter(t => t.type === 'call')
+    .reduce((sum, t) => sum + parseFloat(t.premium || '0'), 0);
+
+  const whalePutPremium = filteredWhales
+    .filter(t => t.type === 'put')
+    .reduce((sum, t) => sum + parseFloat(t.premium || '0'), 0);
+
+  const whaleSweepCount = filteredWhales.filter(t => t.is_sweep).length;
+
+  // Top strikes
+  const strikeActivity: Record<string, number> = {};
+  filteredAlerts.forEach(alert => {
+    const key = `${alert.type.toUpperCase()} $${alert.strike}`;
+    strikeActivity[key] = (strikeActivity[key] || 0) + 1;
+  });
+
+  const topStrikes = Object.entries(strikeActivity)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([strike]) => strike);
+
+  // Trade age buckets
+  const tradeAgeBuckets = { days1_2: 0, days3_5: 0, days6_10: 0 };
+  filteredAlerts.forEach(alert => {
+    const tradeAge = (today.getTime() - new Date(alert.created_at).getTime()) / (1000 * 60 * 60 * 24);
+    if (tradeAge <= 2) tradeAgeBuckets.days1_2++;
+    else if (tradeAge <= 5) tradeAgeBuckets.days3_5++;
+    else tradeAgeBuckets.days6_10++;
+  });
+
+  // Expiration buckets
+  const expirationBuckets = { week3_5: 0, week6_9: 0, week10_13: 0 };
+  filteredAlerts.forEach(alert => {
+    const daysToExpiry = (new Date(alert.expiry).getTime() - today.getTime()) / (1000 * 60 * 60 * 24);
+    if (daysToExpiry <= 35) expirationBuckets.week3_5++;
+    else if (daysToExpiry <= 63) expirationBuckets.week6_9++;
+    else expirationBuckets.week10_13++;
+  });
+
+  // Dark pool metrics
+  const darkPoolVolume = darkPoolData.reduce((sum, t) => sum + (t.size || 0), 0);
+  const darkPoolPremium = darkPoolData.reduce((sum, t) => sum + parseFloat(t.premium || '0'), 0);
+
+  // ==========================================
+  // DETERMINE SENTIMENTS
+  // ==========================================
+
+  const whaleSentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL' =
+    whaleCallPremium > whalePutPremium * 1.5 ? 'BULLISH' :
+    whalePutPremium > whaleCallPremium * 1.5 ? 'BEARISH' : 'NEUTRAL';
+
+  const alertSentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL' =
+    alertCallPremium > alertPutPremium * 1.5 ? 'BULLISH' :
+    alertPutPremium > alertCallPremium * 1.5 ? 'BEARISH' : 'NEUTRAL';
+
+  const darkPoolSentiment: 'ACCUMULATION' | 'DISTRIBUTION' | 'NEUTRAL' =
+    darkPoolVolume > 1000000 ? 'ACCUMULATION' : 'NEUTRAL';
+
+  // Overall sentiment (whale-weighted)
+  const totalCallPrem = whaleCallPremium + alertCallPremium;
+  const totalPutPrem = whalePutPremium + alertPutPremium;
+  const callPutRatio = totalPutPrem > 0 ? totalCallPrem / totalPutPrem : 1;
+
+  let overallSentiment: 'STRONGLY_BULLISH' | 'BULLISH' | 'NEUTRAL' | 'BEARISH' | 'STRONGLY_BEARISH';
+  if (callPutRatio > 3 && whaleSentiment === 'BULLISH') {
+    overallSentiment = 'STRONGLY_BULLISH';
+  } else if (callPutRatio > 1.5 || whaleSentiment === 'BULLISH') {
+    overallSentiment = 'BULLISH';
+  } else if (callPutRatio < 0.33 && whaleSentiment === 'BEARISH') {
+    overallSentiment = 'STRONGLY_BEARISH';
+  } else if (callPutRatio < 0.67 || whaleSentiment === 'BEARISH') {
+    overallSentiment = 'BEARISH';
+  } else {
+    overallSentiment = 'NEUTRAL';
+  }
+
+  // ==========================================
+  // KEY SIGNALS & WARNINGS
+  // ==========================================
+
+  const keySignals: string[] = [];
+  const warnings: string[] = [];
+
+  // Whale signals
+  if (filteredWhales.length > 20) {
+    keySignals.push(`🚨 EXTREME WHALE ACTIVITY: ${filteredWhales.length} large trades ($100K+) in last 10 days`);
+  } else if (filteredWhales.length > 10) {
+    keySignals.push(`🐋 HIGH WHALE ACTIVITY: ${filteredWhales.length} large trades in last 10 days`);
+  }
+
+  // Premium signals
+  if (totalCallPrem > totalPutPrem * 2) {
+    keySignals.push(`🟢 STRONGLY BULLISH FLOW: ${callPutRatio.toFixed(1)}:1 call/put premium ratio`);
+  } else if (totalCallPrem > totalPutPrem * 1.5) {
+    keySignals.push(`🟢 BULLISH FLOW: ${callPutRatio.toFixed(1)}:1 call/put premium ratio`);
+  }
+
+  if (totalPutPrem > totalCallPrem * 2) {
+    keySignals.push(`🔴 STRONGLY BEARISH FLOW: ${(1/callPutRatio).toFixed(1)}:1 put/call premium ratio`);
+  } else if (totalPutPrem > totalCallPrem * 1.5) {
+    keySignals.push(`🔴 BEARISH FLOW: ${(1/callPutRatio).toFixed(1)}:1 put/call premium ratio`);
+  }
+
+  // Sweep signals (urgency)
+  const totalSweeps = alertSweepCount + whaleSweepCount;
+  if (totalSweeps > 10) {
+    keySignals.push(`🔥 EXTREME URGENCY: ${totalSweeps} sweep orders detected`);
+  } else if (totalSweeps > 5) {
+    keySignals.push(`🔥 HIGH URGENCY: ${totalSweeps} sweep orders detected`);
+  }
+
+  // Recency signals
+  if (tradeAgeBuckets.days1_2 > filteredAlerts.length * 0.4 && filteredAlerts.length > 0) {
+    keySignals.push(`⚡ VERY RECENT: ${Math.round(tradeAgeBuckets.days1_2 / filteredAlerts.length * 100)}% of trades in last 2 days`);
+  }
+
+  // Expiration concentration
+  if (expirationBuckets.week3_5 > filteredAlerts.length * 0.5 && filteredAlerts.length > 0) {
+    keySignals.push(`🎯 NEAR-TERM CATALYST: ${Math.round(expirationBuckets.week3_5 / filteredAlerts.length * 100)}% expire in 3-5 weeks`);
+  }
+
+  // Dark pool signals
+  if (darkPoolVolume > 5000000) {
+    keySignals.push(`🐋 MASSIVE INSTITUTIONAL: ${(darkPoolVolume / 1000000).toFixed(1)}M shares in dark pools`);
+  } else if (darkPoolVolume > 1000000) {
+    keySignals.push(`🏦 HEAVY INSTITUTIONAL: ${(darkPoolVolume / 1000000).toFixed(1)}M shares in dark pools`);
+  }
+
+  // Strike concentration
+  if (topStrikes.length > 0) {
+    keySignals.push(`🎯 HOT STRIKES: ${topStrikes.slice(0, 3).join(', ')}`);
+  }
+
+  // Warnings
+  if (filteredAlerts.length < 5 && filteredWhales.length < 3) {
+    warnings.push('⚠️ LOW DATA: Limited unusual activity detected - use caution');
+  }
+
+  if (whaleSentiment !== alertSentiment && whaleSentiment !== 'NEUTRAL' && alertSentiment !== 'NEUTRAL') {
+    warnings.push(`⚠️ CONFLICTING SIGNALS: Whale sentiment (${whaleSentiment}) differs from flow sentiment (${alertSentiment})`);
+  }
+
+  // Calculate confidence score
+  let confidenceScore = 50; // Base
+  if (filteredWhales.length > 10) confidenceScore += 15;
+  else if (filteredWhales.length > 5) confidenceScore += 10;
+  if (totalSweeps > 5) confidenceScore += 10;
+  if (Math.abs(callPutRatio - 1) > 1) confidenceScore += 10;
+  if (tradeAgeBuckets.days1_2 > filteredAlerts.length * 0.3) confidenceScore += 5;
+  if (darkPoolVolume > 1000000) confidenceScore += 10;
+  if (warnings.length > 0) confidenceScore -= 10;
+  confidenceScore = Math.max(20, Math.min(95, confidenceScore));
+
+  // ==========================================
+  // BUILD SUMMARY FOR AI
+  // ==========================================
+
+  const summary = buildAISummary({
+    symbol: upperSymbol,
+    tenDaysAgoStr,
+    todayStr,
+    minExpirationStr,
+    maxExpirationStr,
+    filteredAlerts,
+    alertsData,
+    filteredWhales,
+    whaleCallPremium,
+    whalePutPremium,
+    whaleSweepCount,
+    alertCallPremium,
+    alertPutPremium,
+    alertCallCount,
+    alertPutCount,
+    alertSweepCount,
+    topStrikes,
+    tradeAgeBuckets,
+    expirationBuckets,
+    darkPoolData,
+    darkPoolVolume,
+    darkPoolPremium,
+    callPutRatio,
+    overallSentiment,
+    keySignals,
+    warnings,
+    confidenceScore,
+    today,
+  });
+
+  // ==========================================
+  // BUILD TOP WHALE TRADES
+  // ==========================================
+
+  const topWhaleTrades = filteredWhales
+    .sort((a, b) => parseFloat(b.premium || '0') - parseFloat(a.premium || '0'))
+    .slice(0, 10)
+    .map(t => ({
+      type: t.type.toUpperCase(),
+      strike: t.strike,
+      expiry: t.expiry,
+      premium: parseFloat(t.premium || '0'),
+      isSweep: t.is_sweep || false,
+      tradeAgeDays: Math.floor((today.getTime() - new Date(t.date).getTime()) / (1000 * 60 * 60 * 24)),
+      daysToExpiry: Math.floor((new Date(t.expiry).getTime() - today.getTime()) / (1000 * 60 * 60 * 24)),
+    }));
+
+  return {
+    symbol: upperSymbol,
+    tradeWindowStart: tenDaysAgoStr,
+    tradeWindowEnd: todayStr,
+    expirationMin: minExpirationStr,
+    expirationMax: maxExpirationStr,
+    summary,
+    whaleTrades: {
+      count: filteredWhales.length,
+      callPremium: whaleCallPremium,
+      putPremium: whalePutPremium,
+      sweepCount: whaleSweepCount,
+      sentiment: whaleSentiment,
+      topTrades: topWhaleTrades,
+    },
+    flowAlerts: {
+      count: filteredAlerts.length,
+      totalBeforeFilter: alertsData.length,
+      callPremium: alertCallPremium,
+      putPremium: alertPutPremium,
+      callAlerts: alertCallCount,
+      putAlerts: alertPutCount,
+      sweepCount: alertSweepCount,
+      sentiment: alertSentiment,
+      topStrikes,
+      callPutRatio,
+    },
+    tradeAgeBuckets,
+    expirationBuckets,
+    darkPool: {
+      tradeCount: darkPoolData.length,
+      totalVolume: darkPoolVolume,
+      totalPremium: darkPoolPremium,
+      sentiment: darkPoolSentiment,
+    },
+    signals: {
+      overallSentiment,
+      confidenceScore,
+      keySignals,
+      warnings,
+    },
+  };
+}
+
+// ==========================================
+// BUILD AI SUMMARY
+// ==========================================
+
+function buildAISummary(data: {
+  symbol: string;
+  tenDaysAgoStr: string;
+  todayStr: string;
+  minExpirationStr: string;
+  maxExpirationStr: string;
+  filteredAlerts: UWFlowAlert[];
+  alertsData: UWFlowAlert[];
+  filteredWhales: UWWhaleTrade[];
+  whaleCallPremium: number;
+  whalePutPremium: number;
+  whaleSweepCount: number;
+  alertCallPremium: number;
+  alertPutPremium: number;
+  alertCallCount: number;
+  alertPutCount: number;
+  alertSweepCount: number;
+  topStrikes: string[];
+  tradeAgeBuckets: { days1_2: number; days3_5: number; days6_10: number };
+  expirationBuckets: { week3_5: number; week6_9: number; week10_13: number };
+  darkPoolData: UWDarkPoolTrade[];
+  darkPoolVolume: number;
+  darkPoolPremium: number;
+  callPutRatio: number;
+  overallSentiment: string;
+  keySignals: string[];
+  warnings: string[];
+  confidenceScore: number;
+  today: Date;
+}): string {
+  const {
+    symbol, tenDaysAgoStr, todayStr, minExpirationStr, maxExpirationStr,
+    filteredAlerts, alertsData, filteredWhales, whaleCallPremium, whalePutPremium,
+    whaleSweepCount, alertCallPremium, alertPutPremium, alertCallCount, alertPutCount,
+    alertSweepCount, topStrikes, tradeAgeBuckets, expirationBuckets,
+    darkPoolData, darkPoolVolume, darkPoolPremium, callPutRatio,
+    overallSentiment, keySignals, warnings, confidenceScore, today
+  } = data;
+
+  let summary = `═══════════════════════════════════════════════════════════════════
+🐋 UNUSUAL WHALES SMART MONEY ANALYSIS: ${symbol}
+═══════════════════════════════════════════════════════════════════
+
+📅 ANALYSIS PARAMETERS:
+• Trade Window: Last 10 days (${tenDaysAgoStr} to ${todayStr})
+• Expiration Window: 3-13 weeks (${minExpirationStr} to ${maxExpirationStr})
+• Alerts Analyzed: ${filteredAlerts.length} (filtered from ${alertsData.length} total)
+
+`;
+
+  // WHALE SECTION
+  if (filteredWhales.length > 0) {
+    summary += `🚨 WHALE TRADES ($100K+ PREMIUM):
+• Total Whale Trades: ${filteredWhales.length}
+• Whale Call Premium: $${(whaleCallPremium / 1000000).toFixed(2)}M
+• Whale Put Premium: $${(whalePutPremium / 1000000).toFixed(2)}M
+• Whale Sweep Orders: ${whaleSweepCount}
+• WHALE SENTIMENT: ${whaleCallPremium > whalePutPremium * 1.5 ? '🟢 BULLISH' : whalePutPremium > whaleCallPremium * 1.5 ? '🔴 BEARISH' : '⚪ NEUTRAL'}
+
+TOP 5 WHALE TRADES:
+`;
+
+    const topWhales = filteredWhales
+      .sort((a, b) => parseFloat(b.premium || '0') - parseFloat(a.premium || '0'))
+      .slice(0, 5);
+
+    topWhales.forEach((t, i) => {
+      const premMil = parseFloat(t.premium || '0') / 1000000;
+      const tradeAge = Math.floor((today.getTime() - new Date(t.date).getTime()) / (1000 * 60 * 60 * 24));
+      const daysToExp = Math.floor((new Date(t.expiry).getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      summary += `  ${i + 1}. $${premMil.toFixed(2)}M ${t.type.toUpperCase()} $${t.strike} | ${tradeAge}d ago → exp in ${daysToExp}d${t.is_sweep ? ' [SWEEP]' : ''}\n`;
+    });
+
+    summary += '\n';
+  }
+
+  // FLOW SECTION
+  summary += `📊 OPTIONS FLOW (Filtered: 1-10 days old, 3-13 week exp):
+• Call Premium: $${(alertCallPremium / 1000000).toFixed(2)}M (${alertCallCount} alerts)
+• Put Premium: $${(alertPutPremium / 1000000).toFixed(2)}M (${alertPutCount} alerts)
+• Net Flow: ${alertCallPremium > alertPutPremium ? '🟢 BULLISH' : '🔴 BEARISH'} ($${(Math.abs(alertCallPremium - alertPutPremium) / 1000000).toFixed(2)}M)
+• Call/Put Ratio: ${callPutRatio.toFixed(2)}:1
+• Sweep Orders: ${alertSweepCount}
+
+`;
+
+  // TRADE AGE DISTRIBUTION
+  summary += `⏱️ TRADE AGE DISTRIBUTION:
+• Last 2 days: ${tradeAgeBuckets.days1_2} alerts ${tradeAgeBuckets.days1_2 > filteredAlerts.length * 0.4 ? '⚡ VERY RECENT!' : ''}
+• 3-5 days ago: ${tradeAgeBuckets.days3_5} alerts
+• 6-10 days ago: ${tradeAgeBuckets.days6_10} alerts
+
+`;
+
+  // EXPIRATION DISTRIBUTION
+  summary += `📆 EXPIRATION DISTRIBUTION:
+• Weeks 3-5 (21-35 days): ${expirationBuckets.week3_5} alerts ${expirationBuckets.week3_5 > filteredAlerts.length * 0.5 ? '🎯 NEAR-TERM CATALYST!' : ''}
+• Weeks 6-9 (36-63 days): ${expirationBuckets.week6_9} alerts
+• Weeks 10-13 (64-91 days): ${expirationBuckets.week10_13} alerts
+
+`;
+
+  // DARK POOL
+  summary += `🏦 DARK POOL ACTIVITY (Last 10 days):
+• Total Trades: ${darkPoolData.length}
+• Volume: ${(darkPoolVolume / 1000000).toFixed(2)}M shares
+• Premium: $${(darkPoolPremium / 1000000).toFixed(2)}M
+${darkPoolVolume > 1000000 ? '• 🐋 SIGNIFICANT INSTITUTIONAL ACTIVITY DETECTED' : ''}
+
+`;
+
+  // TOP STRIKES
+  if (topStrikes.length > 0) {
+    summary += `🎯 HOTTEST STRIKES:\n`;
+    topStrikes.forEach((strike, i) => {
+      summary += `  ${i + 1}. ${strike}\n`;
+    });
+    summary += '\n';
+  }
+
+  // KEY SIGNALS
+  summary += `═══════════════════════════════════════════════════════════════════
+🚦 SMART MONEY SIGNALS:
+═══════════════════════════════════════════════════════════════════
+`;
+
+  if (keySignals.length > 0) {
+    keySignals.forEach(signal => {
+      summary += `${signal}\n`;
+    });
+  } else {
+    summary += `• No strong signals detected\n`;
+  }
+
+  // WARNINGS
+  if (warnings.length > 0) {
+    summary += `\n⚠️ WARNINGS:\n`;
+    warnings.forEach(warning => {
+      summary += `${warning}\n`;
+    });
+  }
+
+  // OVERALL VERDICT
+  summary += `
+═══════════════════════════════════════════════════════════════════
+📊 OVERALL SMART MONEY VERDICT: ${overallSentiment.replace('_', ' ')}
+🎯 CONFIDENCE SCORE: ${confidenceScore}/100
+═══════════════════════════════════════════════════════════════════
+
+CRITICAL: Your trading decision MUST align with the whale activity above.
+If whales are BULLISH, do NOT recommend BEARISH trades (and vice versa).
+The smart money (whales) have more information than retail traders.
+`;
+
+  return summary;
 }
