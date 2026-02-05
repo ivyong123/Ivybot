@@ -238,10 +238,10 @@ The forex analysis provides a complete trade setup:
 | EUR/USD, GBP/USD | 0.0001 | $1/pip | 1.0850 → 1.0860 = 10 pips = $10 |
 | USD/JPY, EUR/JPY | 0.01 | ~$0.67/pip | 149.50 → 149.60 = 10 pips = $6.70 |
 | XAU/USD (Gold) | $0.10 | $1/pip | 2050.00 → 2051.00 = 10 pips = $10 |
-| XAG/USD (Silver) | $0.001 | $0.50/pip | 23.50 → 23.55 = 50 pips = $25 |
+| XAG/USD (Silver) | $0.01 | $5/pip | 23.50 → 24.00 = 50 pips = $250 |
 | XTI/USD (Oil) | $0.01 | $0.10/pip | 78.50 → 79.00 = 50 pips = $5 |
 
-**Key Insight:** Gold (XAU/USD) has the **same pip value as EUR/USD** with 0.1 lot ($1/pip). So 50 pips on gold = $50 with 0.1 lot!
+**Key Insight:** Gold (XAU/USD) has the **same pip value as EUR/USD** with 0.1 lot ($1/pip). So 10 pips on gold = $10 with 0.1 lot!
 
 ### Session Recommendations
 
@@ -414,7 +414,7 @@ If you see "looks like a forex pair but you selected Stock Analysis":
 | EUR/USD, GBP/USD | $1/pip | 20-50 pips ($20-50) | 25+ | 50+ | 75+ |
 | USD/JPY | ~$0.67/pip | 25-50 pips ($17-34) | 25+ | 50+ | 75+ |
 | XAU/USD (Gold) | $1/pip | 30-70 pips ($30-70) | 50+ | 100+ | 150+ |
-| XAG/USD (Silver) | $0.50/pip | 30-80 pips ($15-40) | 50+ | 100+ | 150+ |
+| XAG/USD (Silver) | $5/pip | 30-80 pips ($150-400) | 50+ | 100+ | 150+ |
 | XTI/USD (Oil) | $0.10/pip | 30-80 pips ($3-8) | 50+ | 100+ | 150+ |
 
 ### Risk-Reward Requirements

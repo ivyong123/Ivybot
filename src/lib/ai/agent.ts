@@ -633,10 +633,10 @@ function parseForexSetup(raw: Record<string, unknown>, symbol: string): TradeRec
     minValidPrice = 1000;
     instrumentType = 'gold';
   } else if (isSilver) {
-    // Silver: 1 pip = $0.001 price movement
-    // Example: 23.500 to 23.501 = 1 pip
-    // 0.1 lot (500 oz) × 1 pip ($0.001) = $0.50
-    pipMultiplier = 1000;
+    // Silver: 1 pip = $0.01 price movement (same as oil)
+    // Example: 23.50 to 23.51 = 1 pip
+    // 0.1 lot (500 oz) × 1 pip ($0.01) = $5.00
+    pipMultiplier = 100;
     minValidPrice = 10;
     instrumentType = 'silver';
   } else if (isOil) {
@@ -705,12 +705,12 @@ function parseForexSetup(raw: Record<string, unknown>, symbol: string): TradeRec
       DEFAULT_TP3_PIPS = 150;  // $15.00 = 3:1 R:R
       break;
     case 'silver':
-      // Silver: 1 pip = $0.001, so 50 pips = $0.05 move
-      // With 0.1 lot (500 oz): 50 pips = $25 profit/loss
-      DEFAULT_SL_PIPS = 50;    // $0.05 price move (e.g., 23.50 to 23.45)
-      DEFAULT_TP1_PIPS = 50;   // $0.05 = 1:1 R:R
-      DEFAULT_TP2_PIPS = 100;  // $0.10 = 2:1 R:R
-      DEFAULT_TP3_PIPS = 150;  // $0.15 = 3:1 R:R
+      // Silver: 1 pip = $0.01, so 50 pips = $0.50 move
+      // With 0.1 lot (500 oz): 50 pips = $250 profit/loss
+      DEFAULT_SL_PIPS = 50;    // $0.50 price move (e.g., 23.50 to 23.00)
+      DEFAULT_TP1_PIPS = 50;   // $0.50 = 1:1 R:R
+      DEFAULT_TP2_PIPS = 100;  // $1.00 = 2:1 R:R
+      DEFAULT_TP3_PIPS = 150;  // $1.50 = 3:1 R:R
       break;
     case 'oil':
       // Oil: 1 pip = $0.01, so 50 pips = $0.50 move
