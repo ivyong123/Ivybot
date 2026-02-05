@@ -597,39 +597,23 @@ function parseForexSetup(raw: Record<string, unknown>, symbol: string): TradeRec
   // Minimum valid price based on pair type (JPY pairs are around 100-200, others around 0.5-2.0)
   const minValidPrice = isJPY ? 50 : 0.1;
 
-  // Determine the best available price for entry
-  let entryPrice = rawEntryPrice;
-  let currentPrice = rawCurrentPrice;
+  // Entry price MUST be provided by the AI - no fallbacks
+  // We only use current price for display, NOT for fabricating entries
+  const entryPrice = rawEntryPrice;
+  const currentPrice = rawCurrentPrice >= minValidPrice ? rawCurrentPrice : 0;
 
-  // If entry price is invalid, try fallbacks
+  // If AI didn't provide a valid entry price, there's no trade setup
   if (entryPrice < minValidPrice) {
-    console.log(`[Agent] Invalid entry price ${entryPrice}, trying fallbacks...`);
-    // Try current price
-    if (rawCurrentPrice >= minValidPrice) {
-      entryPrice = rawCurrentPrice;
-      console.log(`[Agent] Using current price as entry: ${entryPrice}`);
-    }
-    // Try support/resistance as fallback
-    else if (support1 >= minValidPrice) {
-      entryPrice = support1;
-      currentPrice = support1;
-      console.log(`[Agent] Using support level as entry: ${entryPrice}`);
-    }
-    else if (resistance1 >= minValidPrice) {
-      entryPrice = resistance1;
-      currentPrice = resistance1;
-      console.log(`[Agent] Using resistance level as entry: ${entryPrice}`);
-    }
-    else {
-      // No valid price available - return undefined
-      console.log('[Agent] No valid forex price available, skipping forex_setup');
-      return undefined;
-    }
+    console.log(`[Agent] Invalid entry price ${entryPrice} - AI did not provide a valid trade setup`);
+    console.log('[Agent] Not fabricating forex_setup - returning undefined');
+    return undefined;
   }
 
-  // If current price is still invalid, use entry price
-  if (currentPrice < minValidPrice) {
-    currentPrice = entryPrice;
+  // Validate that SL and TPs are also valid prices (not 0)
+  if (rawStopLoss < minValidPrice || rawTp1 < minValidPrice) {
+    console.log(`[Agent] Invalid SL (${rawStopLoss}) or TP1 (${rawTp1}) - incomplete trade setup`);
+    console.log('[Agent] Not fabricating forex_setup - returning undefined');
+    return undefined;
   }
 
   const direction = (trade?.direction || raw.direction || 'long') as string;
