@@ -221,6 +221,40 @@ async function checkOpenAI(): Promise<DiagnosticResult> {
   }
 }
 
+async function checkTwelveData(): Promise<DiagnosticResult> {
+  const apiKey = process.env.TWELVEDATA_API_KEY;
+  if (!apiKey) {
+    return { name: 'Twelve Data (Forex)', status: 'error', message: 'API key not configured - Forex analysis unavailable' };
+  }
+
+  try {
+    const response = await fetch(
+      `https://api.twelvedata.com/quote?symbol=EUR/USD&apikey=${apiKey}`
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.status === 'error') {
+        return {
+          name: 'Twelve Data (Forex)',
+          status: 'error',
+          message: 'API error',
+          details: data.message
+        };
+      }
+      if (data.close) {
+        return { name: 'Twelve Data (Forex)', status: 'ok', message: `Connected - Forex quotes available (EUR/USD: ${data.close})` };
+      }
+      return { name: 'Twelve Data (Forex)', status: 'warning', message: 'Connected but no data returned' };
+    } else {
+      const error = await response.text();
+      return { name: 'Twelve Data (Forex)', status: 'error', message: `API error: ${response.status}`, details: error };
+    }
+  } catch (error) {
+    return { name: 'Twelve Data (Forex)', status: 'error', message: 'Connection failed', details: String(error) };
+  }
+}
+
 async function checkSupabase(): Promise<DiagnosticResult> {
   try {
     const supabase = await createClient();
@@ -269,6 +303,7 @@ export async function GET(request: NextRequest) {
       checkFinnhub(),
       checkBenzinga(),
       checkUnusualWhales(),
+      checkTwelveData(),
       checkSupabase(),
     ]);
 

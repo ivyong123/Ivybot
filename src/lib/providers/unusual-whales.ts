@@ -211,19 +211,7 @@ export async function getUnusualOptionsFlow(symbol: string): Promise<UnusualFlow
     } as UnusualFlowSummary & { enhanced_whale_data: EnhancedWhaleData };
   } catch (error) {
     console.error(`[Unusual Whales] Error fetching comprehensive data for ${upperSymbol}:`, error);
-
-    // Return empty data instead of throwing - allows analysis to continue without whale data
-    return {
-      symbol: upperSymbol,
-      flows: [],
-      total_call_premium: 0,
-      total_put_premium: 0,
-      call_put_ratio: 1,
-      overall_sentiment: 'neutral',
-      notable_strikes: [],
-      enhanced_whale_data: null,
-      error: error instanceof Error ? error.message : 'Failed to fetch whale data',
-    } as UnusualFlowSummary & { enhanced_whale_data: EnhancedWhaleData | null; error?: string };
+    throw error;
   }
 }
 
