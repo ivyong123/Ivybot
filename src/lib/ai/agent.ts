@@ -607,42 +607,58 @@ function parseForexSetup(raw: Record<string, unknown>, symbol: string): TradeRec
   const resistance1 = Number((levels?.key_resistance as number[])?.[0] || 0);
 
   // Determine pip multiplier, min valid price, and default pip ranges based on instrument type
-  // Sources: Myfxbook, Babypips, FXTM pip calculators
+  //
+  // STANDARD PIP VALUES (with 0.1 lot = $1 per pip):
+  // - EUR/USD: 1 pip = 0.0001, 0.1 lot = $1/pip, 1 lot = $10/pip
+  // - USD/JPY: 1 pip = 0.01, 0.1 lot = $1/pip (approx), 1 lot = $10/pip
+  // - XAU/USD (Gold): 1 pip = $0.10, 0.1 lot (10 oz) = $1/pip, 1 lot (100 oz) = $10/pip
+  // - XAG/USD (Silver): 1 pip = $0.01, 0.1 lot (500 oz) = $5/pip, 1 lot (5000 oz) = $50/pip
+  // - XTI/USD (Oil): 1 pip = $0.01, 0.1 lot (10 barrels) = $0.10/pip, 1 lot (100 barrels) = $1/pip
+  //
   const upperSymbol = symbol.toUpperCase();
   const isJPY = upperSymbol.includes('JPY');
   const isGold = upperSymbol.includes('XAU');
   const isSilver = upperSymbol.includes('XAG');
   const isOil = upperSymbol.includes('XTI') || upperSymbol.includes('XBR') || upperSymbol.includes('OIL');
 
-  // Pip multipliers (1 pip = price movement):
-  // - Standard pairs (EUR/USD, GBP/USD): 1 pip = 0.0001 (5 decimals)
-  // - JPY pairs (USD/JPY): 1 pip = 0.01 (3 decimals)
-  // - Gold (XAU/USD): 1 pip = 0.01 (2 decimals) - but typical moves are 100-500+ pips
-  // - Silver (XAG/USD): 1 pip = 0.01 (2 decimals)
-  // - Oil (XTI/USD): 1 pip = 0.01 (2 decimals)
   let pipMultiplier: number;
   let minValidPrice: number;
   let instrumentType: 'standard' | 'jpy' | 'gold' | 'silver' | 'oil';
 
   if (isGold) {
-    pipMultiplier = 100; // 1 pip = $0.01 movement
-    minValidPrice = 1000; // Gold prices are typically 1800-2500
+    // Gold: 1 pip = $0.10 price movement
+    // Example: 2050.00 to 2050.10 = 1 pip
+    // 0.1 lot (10 oz) × 1 pip ($0.10) = $1
+    pipMultiplier = 10; // price × 10 = pips (e.g., $0.10 move = 1 pip)
+    minValidPrice = 1000;
     instrumentType = 'gold';
   } else if (isSilver) {
-    pipMultiplier = 100; // 1 pip = $0.01 movement (same as gold)
-    minValidPrice = 10; // Silver prices are typically 20-35
+    // Silver: 1 pip = $0.001 price movement
+    // Example: 23.500 to 23.501 = 1 pip
+    // 0.1 lot (500 oz) × 1 pip ($0.001) = $0.50
+    pipMultiplier = 1000;
+    minValidPrice = 10;
     instrumentType = 'silver';
   } else if (isOil) {
-    pipMultiplier = 100; // 1 pip = $0.01 movement
-    minValidPrice = 30; // Oil prices are typically 50-120
+    // Oil: 1 pip = $0.01 price movement
+    // Example: 78.50 to 78.51 = 1 pip
+    // 0.1 lot (10 barrels) × 1 pip ($0.01) = $0.10
+    pipMultiplier = 100;
+    minValidPrice = 30;
     instrumentType = 'oil';
   } else if (isJPY) {
-    pipMultiplier = 100; // 1 pip = 0.01 yen movement
-    minValidPrice = 50; // JPY pairs are typically 100-200
+    // JPY pairs: 1 pip = 0.01 yen movement
+    // Example: 149.50 to 149.51 = 1 pip
+    // 0.1 lot × 1 pip = ~$0.67 (varies with exchange rate)
+    pipMultiplier = 100;
+    minValidPrice = 50;
     instrumentType = 'jpy';
   } else {
-    pipMultiplier = 10000; // 1 pip = 0.0001 movement
-    minValidPrice = 0.1; // Standard pairs are typically 0.5-2.0
+    // Standard pairs: 1 pip = 0.0001 movement
+    // Example: 1.0850 to 1.0851 = 1 pip
+    // 0.1 lot × 1 pip = $1
+    pipMultiplier = 10000;
+    minValidPrice = 0.1;
     instrumentType = 'standard';
   }
 
@@ -681,22 +697,25 @@ function parseForexSetup(raw: Record<string, unknown>, symbol: string): TradeRec
 
   switch (instrumentType) {
     case 'gold':
-      // Gold: same as silver/oil - SL 30-80 pips ($0.30-0.80)
-      DEFAULT_SL_PIPS = 50;    // $0.50 move
-      DEFAULT_TP1_PIPS = 50;   // $0.50 = 1:1 R:R
-      DEFAULT_TP2_PIPS = 100;  // $1.00 = 2:1 R:R
-      DEFAULT_TP3_PIPS = 150;  // $1.50 = 3:1 R:R
+      // Gold: 1 pip = $0.10, so 50 pips = $5.00 move
+      // With 0.1 lot: 50 pips = $50 profit/loss
+      DEFAULT_SL_PIPS = 50;    // $5.00 price move (e.g., 2050 to 2045)
+      DEFAULT_TP1_PIPS = 50;   // $5.00 = 1:1 R:R
+      DEFAULT_TP2_PIPS = 100;  // $10.00 = 2:1 R:R
+      DEFAULT_TP3_PIPS = 150;  // $15.00 = 3:1 R:R
       break;
     case 'silver':
-      // Silver: SL 30-80 pips ($0.30-0.80), TP 50-200 pips ($0.50-2.00)
-      DEFAULT_SL_PIPS = 50;    // $0.50 move
-      DEFAULT_TP1_PIPS = 50;   // $0.50 = 1:1 R:R
-      DEFAULT_TP2_PIPS = 100;  // $1.00 = 2:1 R:R
-      DEFAULT_TP3_PIPS = 150;  // $1.50 = 3:1 R:R
+      // Silver: 1 pip = $0.001, so 50 pips = $0.05 move
+      // With 0.1 lot (500 oz): 50 pips = $25 profit/loss
+      DEFAULT_SL_PIPS = 50;    // $0.05 price move (e.g., 23.50 to 23.45)
+      DEFAULT_TP1_PIPS = 50;   // $0.05 = 1:1 R:R
+      DEFAULT_TP2_PIPS = 100;  // $0.10 = 2:1 R:R
+      DEFAULT_TP3_PIPS = 150;  // $0.15 = 3:1 R:R
       break;
     case 'oil':
-      // Oil: SL 30-80 pips ($0.30-0.80), TP 50-200 pips ($0.50-2.00)
-      DEFAULT_SL_PIPS = 50;    // $0.50 move
+      // Oil: 1 pip = $0.01, so 50 pips = $0.50 move
+      // With 0.1 lot (10 barrels): 50 pips = $5 profit/loss
+      DEFAULT_SL_PIPS = 50;    // $0.50 price move (e.g., 78.50 to 78.00)
       DEFAULT_TP1_PIPS = 50;   // $0.50 = 1:1 R:R
       DEFAULT_TP2_PIPS = 100;  // $1.00 = 2:1 R:R
       DEFAULT_TP3_PIPS = 150;  // $1.50 = 3:1 R:R

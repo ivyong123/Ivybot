@@ -259,17 +259,23 @@ export default function HelpPage() {
                   <tr>
                     <th>Instrument</th>
                     <th>1 Pip =</th>
-                    <th>Example</th>
+                    <th>0.1 Lot Value</th>
+                    <th>Example Move</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr><td>EUR/USD, GBP/USD</td><td>0.0001</td><td>1.08520 → 1.08530</td></tr>
-                  <tr><td>USD/JPY, EUR/JPY</td><td>0.01</td><td>149.50 → 149.51</td></tr>
-                  <tr><td>XAU/USD (Gold)</td><td>$0.01</td><td>2050.00 → 2050.01</td></tr>
-                  <tr><td>XAG/USD (Silver)</td><td>$0.01</td><td>23.50 → 23.51</td></tr>
-                  <tr><td>XTI/USD (Oil)</td><td>$0.01</td><td>78.50 → 78.51</td></tr>
+                  <tr><td>EUR/USD, GBP/USD</td><td>0.0001</td><td>$1/pip</td><td>1.0850 → 1.0860 = 10 pips = $10</td></tr>
+                  <tr><td>USD/JPY, EUR/JPY</td><td>0.01</td><td>~$0.67/pip</td><td>149.50 → 149.60 = 10 pips = $6.70</td></tr>
+                  <tr><td>XAU/USD (Gold)</td><td>$0.10</td><td>$1/pip</td><td>2050.00 → 2051.00 = 10 pips = $10</td></tr>
+                  <tr><td>XAG/USD (Silver)</td><td>$0.001</td><td>$0.50/pip</td><td>23.50 → 23.55 = 50 pips = $25</td></tr>
+                  <tr><td>XTI/USD (Oil)</td><td>$0.01</td><td>$0.10/pip</td><td>78.50 → 79.00 = 50 pips = $5</td></tr>
                 </tbody>
               </table>
+            </div>
+
+            <div className="glass border-l-4 border-primary rounded-xl p-6 my-4">
+              <p className="font-semibold text-primary mb-2">Key Insight</p>
+              <p className="mb-0">Gold (XAU/USD) has the <strong>same pip value as EUR/USD</strong> with 0.1 lot ($1/pip). So 50 pips on gold = $50 with 0.1 lot, just like forex!</p>
             </div>
 
             <h3>Session Recommendations</h3>
@@ -382,12 +388,13 @@ export default function HelpPage() {
               </table>
             </div>
 
-            <h3>Pip Ranges by Instrument</h3>
+            <h3>Pip Ranges by Instrument (with 0.1 lot $ values)</h3>
             <div className="overflow-x-auto">
               <table>
                 <thead>
                   <tr>
                     <th>Instrument</th>
+                    <th>1 Pip Value</th>
                     <th>SL Range</th>
                     <th>TP1</th>
                     <th>TP2</th>
@@ -395,11 +402,11 @@ export default function HelpPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr><td>EUR/USD, GBP/USD</td><td>20-50 pips</td><td>25+</td><td>50+</td><td>75+</td></tr>
-                  <tr><td>USD/JPY</td><td>20-50 pips</td><td>25+</td><td>50+</td><td>75+</td></tr>
-                  <tr><td>XAU/USD (Gold)</td><td>30-80 pips</td><td>50+</td><td>100+</td><td>150+</td></tr>
-                  <tr><td>XAG/USD (Silver)</td><td>30-80 pips</td><td>50+</td><td>100+</td><td>150+</td></tr>
-                  <tr><td>XTI/USD (Oil)</td><td>30-80 pips</td><td>50+</td><td>100+</td><td>150+</td></tr>
+                  <tr><td>EUR/USD, GBP/USD</td><td>$1/pip</td><td>20-50 pips ($20-50)</td><td>25+</td><td>50+</td><td>75+</td></tr>
+                  <tr><td>USD/JPY</td><td>$0.67/pip</td><td>25-50 pips ($17-34)</td><td>25+</td><td>50+</td><td>75+</td></tr>
+                  <tr><td>XAU/USD (Gold)</td><td>$1/pip</td><td>30-70 pips ($30-70)</td><td>50+</td><td>100+</td><td>150+</td></tr>
+                  <tr><td>XAG/USD (Silver)</td><td>$0.50/pip</td><td>30-80 pips ($15-40)</td><td>50+</td><td>100+</td><td>150+</td></tr>
+                  <tr><td>XTI/USD (Oil)</td><td>$0.10/pip</td><td>30-80 pips ($3-8)</td><td>50+</td><td>100+</td><td>150+</td></tr>
                 </tbody>
               </table>
             </div>

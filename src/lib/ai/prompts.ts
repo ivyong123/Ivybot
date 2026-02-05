@@ -415,34 +415,38 @@ Analyze which trading session is optimal:
 
 ## MANDATORY PIP REQUIREMENTS (VARIES BY INSTRUMENT!)
 
-**CRITICAL: Pip ranges differ significantly between instruments!**
-30 pips on EUR/USD ≠ 30 pips on Gold. Use the correct ranges below:
+**CRITICAL: Understand pip values and lot sizes!**
+With 0.1 lot, aim for similar dollar risk across instruments.
 
 ### Standard Currency Pairs (EUR/USD, GBP/USD, AUD/USD, etc.)
-- **1 pip = 0.0001** (4th decimal)
-- SL: 20-50 pips (0.0020-0.0050 move)
+- **1 pip = 0.0001** | 0.1 lot = $1/pip
+- SL: 20-50 pips ($20-$50 risk with 0.1 lot)
 - TP1: 25+ pips, TP2: 50+ pips, TP3: 75+ pips
+- Example: Entry 1.0850, SL 1.0825 = 25 pips, TP1 1.0875 = 25 pips
 
 ### JPY Pairs (USD/JPY, EUR/JPY, GBP/JPY, etc.)
-- **1 pip = 0.01** (2nd decimal)
-- SL: 20-50 pips (0.20-0.50 move)
+- **1 pip = 0.01** | 0.1 lot = ~$0.67/pip
+- SL: 25-50 pips ($17-$34 risk with 0.1 lot)
 - TP1: 25+ pips, TP2: 50+ pips, TP3: 75+ pips
+- Example: Entry 149.50, SL 149.25 = 25 pips, TP1 149.75 = 25 pips
 
-### Gold (XAU/USD)
-- **1 pip = $0.01** (2nd decimal)
-- SL: 30-80 pips ($0.30-$0.80 move)
-- TP1: 50+ pips ($0.50), TP2: 100+ pips ($1.00), TP3: 150+ pips ($1.50)
-- Example: Entry $2050.00, SL $2049.50 = 50 pips, TP1 $2050.50 = 50 pips
+### Gold (XAU/USD) - IMPORTANT!
+- **1 pip = $0.10** | 0.1 lot = $1/pip (same as EUR/USD!)
+- SL: 30-70 pips ($30-$70 risk with 0.1 lot, or $3-$7 price move)
+- TP1: 50+ pips ($5), TP2: 100+ pips ($10), TP3: 150+ pips ($15)
+- Example: Entry 2050.00, SL 2045.00 = 50 pips ($5 move), TP1 2055.00 = 50 pips
 
 ### Silver (XAG/USD)
-- **1 pip = $0.01** (2nd decimal)
-- SL: 30-80 pips ($0.30-$0.80 move)
-- TP1: 50+ pips ($0.50), TP2: 100+ pips ($1.00), TP3: 150+ pips ($1.50)
+- **1 pip = $0.001** | 0.1 lot = $0.50/pip
+- SL: 30-80 pips ($15-$40 risk with 0.1 lot)
+- TP1: 50+ pips, TP2: 100+ pips, TP3: 150+ pips
+- Example: Entry 23.500, SL 23.450 = 50 pips ($0.05 move), TP1 23.550 = 50 pips
 
 ### Oil (XTI/USD, XBR/USD)
-- **1 pip = $0.01** (2nd decimal)
-- SL: 30-80 pips ($0.30-$0.80 move)
-- TP1: 50+ pips ($0.50), TP2: 100+ pips ($1.00), TP3: 150+ pips ($1.50)
+- **1 pip = $0.01** | 0.1 lot = $0.10/pip
+- SL: 30-80 pips ($3-$8 risk with 0.1 lot)
+- TP1: 50+ pips, TP2: 100+ pips, TP3: 150+ pips
+- Example: Entry 78.50, SL 78.00 = 50 pips ($0.50 move), TP1 79.00 = 50 pips
 
 **Risk/Reward (applies to ALL instruments):**
 - TP1 must provide minimum 1:1 R:R
@@ -465,12 +469,22 @@ Your forex_setup MUST include:
 12. **Session Recommendation**: Which session is best for this trade
 13. **News Warning**: Any high-impact events to avoid
 
-## Price Precision & Pip Values
-- Standard pairs (EUR/USD, GBP/USD, etc.): 5 decimal places (e.g., 1.08523), pip = 0.0001
-- JPY pairs (USD/JPY, EUR/JPY, etc.): 3 decimal places (e.g., 149.234), pip = 0.01
-- Gold (XAU/USD): 2 decimal places (e.g., 2048.50), pip = 0.01 (so 100 pips = $1.00 move)
-- Silver (XAG/USD): 3 decimal places (e.g., 23.456), pip = 0.001
-- Oil (XTI/USD, XBR/USD): 2 decimal places (e.g., 78.50), pip = 0.01
+## Price Precision & Pip Values (IMPORTANT!)
+
+### Standard Pip Values with Lot Sizes:
+| Instrument | 1 Pip = | 0.01 Lot | 0.1 Lot | 1 Lot |
+|------------|---------|----------|---------|-------|
+| EUR/USD | 0.0001 | $0.10 | $1.00 | $10.00 |
+| USD/JPY | 0.01 | ~$0.07 | ~$0.67 | ~$6.70 |
+| XAU/USD (Gold) | $0.10 | $0.10 | $1.00 | $10.00 |
+| XAG/USD (Silver) | $0.001 | $0.05 | $0.50 | $5.00 |
+| XTI/USD (Oil) | $0.01 | $0.01 | $0.10 | $1.00 |
+
+### Pip Movement Examples:
+- EUR/USD: 1.0850 → 1.0860 = 10 pips = $10 with 0.1 lot
+- XAU/USD: 2050.00 → 2051.00 = 10 pips = $10 with 0.1 lot
+- XAG/USD: 23.500 → 23.550 = 50 pips = $25 with 0.1 lot
+- XTI/USD: 78.50 → 79.00 = 50 pips = $5 with 0.1 lot
 
 Always search the forex knowledge base for relevant strategies and setups.
 
@@ -677,12 +691,12 @@ Price Direction Rules:
 - LONG/BUY: entry_price > stop_loss AND entry_price < take_profits (SL below, TPs above)
 - SHORT/SELL: entry_price < stop_loss AND entry_price > take_profits (SL above, TPs below)
 
-CRITICAL - PIP RANGES BY INSTRUMENT:
-- Standard pairs (EUR/USD): SL 20-50 pips, TP1 25+, TP2 50+, TP3 75+
-- JPY pairs: SL 20-50 pips, TP1 25+, TP2 50+, TP3 75+
-- GOLD (XAU/USD): SL 30-80 pips ($0.30-0.80), TP1 50+, TP2 100+, TP3 150+
-- Silver (XAG/USD): SL 30-80 pips, TP1 50+, TP2 100+, TP3 150+
-- Oil (XTI/USD): SL 30-80 pips, TP1 50+, TP2 100+, TP3 150+
+CRITICAL - PIP VALUES & RANGES (0.1 lot reference):
+- EUR/USD: 1 pip=$1, SL 20-50 pips ($20-50), TP1 25+, TP2 50+, TP3 75+
+- JPY pairs: 1 pip=$0.67, SL 25-50 pips, TP1 25+, TP2 50+, TP3 75+
+- GOLD (XAU/USD): 1 pip=$1 (same as EUR!), SL 30-70 pips ($30-70), TP1 50+, TP2 100+, TP3 150+
+- Silver (XAG/USD): 1 pip=$0.50, SL 30-80 pips, TP1 50+, TP2 100+, TP3 150+
+- Oil (XTI/USD): 1 pip=$0.10, SL 30-80 pips, TP1 50+, TP2 100+, TP3 150+
 
 {
   "symbol": "EUR/USD or XAU/USD",

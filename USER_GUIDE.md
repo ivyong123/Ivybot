@@ -231,15 +231,17 @@ The forex analysis provides a complete trade setup:
 | **Take Profit 2 (TP2)** | Standard target (2:1 R:R) |
 | **Take Profit 3 (TP3)** | Extended target (3:1 R:R) |
 
-#### Pip Values by Instrument
+#### Pip Values by Instrument (with 0.1 Lot)
 
-| Instrument | 1 Pip = | Example |
-|------------|---------|---------|
-| EUR/USD, GBP/USD | 0.0001 | 1.08520 → 1.08530 = 1 pip |
-| USD/JPY, EUR/JPY | 0.01 | 149.50 → 149.51 = 1 pip |
-| XAU/USD (Gold) | $0.01 | 2050.00 → 2050.01 = 1 pip |
-| XAG/USD (Silver) | $0.01 | 23.50 → 23.51 = 1 pip |
-| XTI/USD (Oil) | $0.01 | 78.50 → 78.51 = 1 pip |
+| Instrument | 1 Pip = | 0.1 Lot Value | Example |
+|------------|---------|---------------|---------|
+| EUR/USD, GBP/USD | 0.0001 | $1/pip | 1.0850 → 1.0860 = 10 pips = $10 |
+| USD/JPY, EUR/JPY | 0.01 | ~$0.67/pip | 149.50 → 149.60 = 10 pips = $6.70 |
+| XAU/USD (Gold) | $0.10 | $1/pip | 2050.00 → 2051.00 = 10 pips = $10 |
+| XAG/USD (Silver) | $0.001 | $0.50/pip | 23.50 → 23.55 = 50 pips = $25 |
+| XTI/USD (Oil) | $0.01 | $0.10/pip | 78.50 → 79.00 = 50 pips = $5 |
+
+**Key Insight:** Gold (XAU/USD) has the **same pip value as EUR/USD** with 0.1 lot ($1/pip). So 50 pips on gold = $50 with 0.1 lot!
 
 ### Session Recommendations
 
@@ -405,15 +407,15 @@ If you see "looks like a forex pair but you selected Stock Analysis":
 | 55-69% | Mixed signals | Trade with reduced size |
 | Below 55% | No edge | Don't trade (Wait) |
 
-### Pip Ranges by Instrument
+### Pip Ranges by Instrument (with 0.1 Lot $ Risk)
 
-| Instrument | SL Range | TP1 | TP2 | TP3 |
-|------------|----------|-----|-----|-----|
-| EUR/USD, GBP/USD | 20-50 pips | 25+ | 50+ | 75+ |
-| USD/JPY | 20-50 pips | 25+ | 50+ | 75+ |
-| XAU/USD (Gold) | 30-80 pips | 50+ | 100+ | 150+ |
-| XAG/USD (Silver) | 30-80 pips | 50+ | 100+ | 150+ |
-| XTI/USD (Oil) | 30-80 pips | 50+ | 100+ | 150+ |
+| Instrument | 0.1 Lot Pip Value | SL Range | TP1 | TP2 | TP3 |
+|------------|-------------------|----------|-----|-----|-----|
+| EUR/USD, GBP/USD | $1/pip | 20-50 pips ($20-50) | 25+ | 50+ | 75+ |
+| USD/JPY | ~$0.67/pip | 25-50 pips ($17-34) | 25+ | 50+ | 75+ |
+| XAU/USD (Gold) | $1/pip | 30-70 pips ($30-70) | 50+ | 100+ | 150+ |
+| XAG/USD (Silver) | $0.50/pip | 30-80 pips ($15-40) | 50+ | 100+ | 150+ |
+| XTI/USD (Oil) | $0.10/pip | 30-80 pips ($3-8) | 50+ | 100+ | 150+ |
 
 ### Risk-Reward Requirements
 
