@@ -93,8 +93,9 @@ async function checkUnusualWhales(): Promise<DiagnosticResult> {
   }
 
   try {
+    // Use the new flow-alerts endpoint
     const response = await fetch(
-      `https://api.unusualwhales.com/api/stock/AAPL/flow-alerts`,
+      `https://api.unusualwhales.com/api/option-trades/flow-alerts?ticker_symbol=AAPL`,
       {
         headers: {
           'Accept': 'application/json',
@@ -142,7 +143,7 @@ async function checkOpenRouter(): Promise<DiagnosticResult> {
     const authData = await authResponse.json();
     const credits = authData.data?.limit_remaining;
 
-    // Now test actual completion with Claude 3.5 Sonnet
+    // Now test actual completion with Claude 3.7 Sonnet
     const testResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -152,7 +153,7 @@ async function checkOpenRouter(): Promise<DiagnosticResult> {
         'X-Title': 'CheekyTrader AI',
       },
       body: JSON.stringify({
-        model: 'anthropic/claude-3.5-sonnet',
+        model: 'anthropic/claude-3.7-sonnet',
         messages: [{ role: 'user', content: 'Say "OK" only.' }],
         max_tokens: 10,
       }),
@@ -162,7 +163,7 @@ async function checkOpenRouter(): Promise<DiagnosticResult> {
       return {
         name: 'OpenRouter (AI)',
         status: 'ok',
-        message: 'Connected - Claude 3.5 Sonnet working',
+        message: 'Connected - Claude 3.7 Sonnet working',
         details: `Credits: $${credits?.toFixed(2) || 'unknown'}`
       };
     } else {

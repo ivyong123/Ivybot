@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
       });
 
       const completion = await openRouterClient.chat.completions.create({
-        model: 'anthropic/claude-3.5-sonnet',
+        model: 'anthropic/claude-3.7-sonnet',
         messages: [{ role: 'user', content: 'Say "Hello" only.' }],
         max_tokens: 20,
       });
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
       // Test with tools
       console.log('[Test] Testing OpenRouter with tools...');
       const toolCompletion = await openRouterClient.chat.completions.create({
-        model: 'anthropic/claude-3.5-sonnet',
+        model: 'anthropic/claude-3.7-sonnet',
         messages: [{ role: 'user', content: 'Get the stock price for AAPL' }],
         tools: [TEST_TOOL],
         tool_choice: 'auto',
