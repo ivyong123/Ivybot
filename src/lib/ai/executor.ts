@@ -110,7 +110,9 @@ async function executeTool(
 
       case 'get_unusual_options_flow': {
         const params = validateToolArgs<GetUnusualOptionsFlowParams>(toolName, args);
+        console.log(`[Unusual Whales] Fetching options flow for ${params.symbol}...`);
         const result = await getUnusualOptionsFlow(params.symbol);
+        console.log(`[Unusual Whales] Got ${result.flows?.length || 0} flows for ${params.symbol}, sentiment: ${result.overall_sentiment}`);
         return { result };
       }
 

@@ -16,6 +16,8 @@ async function uwFetch<T>(endpoint: string, params: Record<string, string> = {})
     url.searchParams.set(key, value);
   });
 
+  console.log(`[Unusual Whales API] Calling ${endpoint} with params:`, params);
+
   const response = await fetch(url.toString(), {
     headers: {
       'Accept': 'application/json',
@@ -25,9 +27,11 @@ async function uwFetch<T>(endpoint: string, params: Record<string, string> = {})
 
   if (!response.ok) {
     const error = await response.text();
+    console.error(`[Unusual Whales API] Error ${response.status}:`, error);
     throw new Error(`Unusual Whales API error: ${response.status} - ${error}`);
   }
 
+  console.log(`[Unusual Whales API] Success for ${endpoint}`);
   return response.json();
 }
 
