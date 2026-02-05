@@ -665,21 +665,21 @@ function parseForexSetup(raw: Record<string, unknown>, symbol: string): TradeRec
 
   switch (instrumentType) {
     case 'gold':
-      // Gold: typical SL 300-800 pips ($3-8), TP 500-2000 pips ($5-20)
-      DEFAULT_SL_PIPS = 500;   // $5.00 move
-      DEFAULT_TP1_PIPS = 500;  // $5.00 = 1:1 R:R
-      DEFAULT_TP2_PIPS = 1000; // $10.00 = 2:1 R:R
-      DEFAULT_TP3_PIPS = 1500; // $15.00 = 3:1 R:R
+      // Gold: same as silver/oil - SL 30-80 pips ($0.30-0.80)
+      DEFAULT_SL_PIPS = 50;    // $0.50 move
+      DEFAULT_TP1_PIPS = 50;   // $0.50 = 1:1 R:R
+      DEFAULT_TP2_PIPS = 100;  // $1.00 = 2:1 R:R
+      DEFAULT_TP3_PIPS = 150;  // $1.50 = 3:1 R:R
       break;
     case 'silver':
-      // Silver: typical SL 30-80 pips ($0.30-0.80), TP 50-200 pips ($0.50-2.00)
+      // Silver: SL 30-80 pips ($0.30-0.80), TP 50-200 pips ($0.50-2.00)
       DEFAULT_SL_PIPS = 50;    // $0.50 move
       DEFAULT_TP1_PIPS = 50;   // $0.50 = 1:1 R:R
       DEFAULT_TP2_PIPS = 100;  // $1.00 = 2:1 R:R
       DEFAULT_TP3_PIPS = 150;  // $1.50 = 3:1 R:R
       break;
     case 'oil':
-      // Oil: typical SL 30-80 pips ($0.30-0.80), TP 50-200 pips ($0.50-2.00)
+      // Oil: SL 30-80 pips ($0.30-0.80), TP 50-200 pips ($0.50-2.00)
       DEFAULT_SL_PIPS = 50;    // $0.50 move
       DEFAULT_TP1_PIPS = 50;   // $0.50 = 1:1 R:R
       DEFAULT_TP2_PIPS = 100;  // $1.00 = 2:1 R:R

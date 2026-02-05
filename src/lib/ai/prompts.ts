@@ -410,11 +410,11 @@ Analyze which trading session is optimal:
 - SL: 20-50 pips (0.20-0.50 move)
 - TP1: 25+ pips, TP2: 50+ pips, TP3: 75+ pips
 
-### Gold (XAU/USD) - MUCH LARGER PIP COUNTS!
+### Gold (XAU/USD)
 - **1 pip = $0.01** (2nd decimal)
-- SL: 300-800 pips ($3.00-$8.00 move)
-- TP1: 500+ pips ($5.00), TP2: 1000+ pips ($10.00), TP3: 1500+ pips ($15.00)
-- Example: Entry $2050.00, SL $2045.00 = 500 pips, TP1 $2055.00 = 500 pips
+- SL: 30-80 pips ($0.30-$0.80 move)
+- TP1: 50+ pips ($0.50), TP2: 100+ pips ($1.00), TP3: 150+ pips ($1.50)
+- Example: Entry $2050.00, SL $2049.50 = 50 pips, TP1 $2050.50 = 50 pips
 
 ### Silver (XAG/USD)
 - **1 pip = $0.01** (2nd decimal)
@@ -644,10 +644,10 @@ Price Direction Rules:
 - LONG/BUY: entry_price > stop_loss AND entry_price < take_profits (SL below, TPs above)
 - SHORT/SELL: entry_price < stop_loss AND entry_price > take_profits (SL above, TPs below)
 
-CRITICAL - PIP RANGES BY INSTRUMENT (30 pips EUR/USD ≠ 30 pips Gold!):
+CRITICAL - PIP RANGES BY INSTRUMENT:
 - Standard pairs (EUR/USD): SL 20-50 pips, TP1 25+, TP2 50+, TP3 75+
 - JPY pairs: SL 20-50 pips, TP1 25+, TP2 50+, TP3 75+
-- GOLD (XAU/USD): SL 300-800 pips ($3-8), TP1 500+ ($5), TP2 1000+ ($10), TP3 1500+ ($15)
+- GOLD (XAU/USD): SL 30-80 pips ($0.30-0.80), TP1 50+, TP2 100+, TP3 150+
 - Silver (XAG/USD): SL 30-80 pips, TP1 50+, TP2 100+, TP3 150+
 - Oil (XTI/USD): SL 30-80 pips, TP1 50+, TP2 100+, TP3 150+
 
