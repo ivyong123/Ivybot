@@ -53,7 +53,7 @@ export function StandaloneResults({ result }: StandaloneResultsProps) {
             </div>
             <h2 className="text-lg font-semibold">AI Summary</h2>
           </div>
-          <div className="prose prose-invert prose-sm max-w-none">
+          <div className="prose dark:prose-invert prose-sm max-w-none">
             <ReactMarkdown>{result.summary}</ReactMarkdown>
           </div>
         </div>
