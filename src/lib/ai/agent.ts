@@ -620,7 +620,7 @@ function parseForexSetup(raw: Record<string, unknown>, symbol: string): TradeRec
 
     trade: {
       action,
-      orderType: orderType as string, // BUY_LIMIT, BUY_STOP, SELL_LIMIT, SELL_STOP, or MARKET
+      orderType: orderType as 'LIMIT' | 'MARKET' | 'BUY_LIMIT' | 'BUY_STOP' | 'SELL_LIMIT' | 'SELL_STOP',
       entryPrice,
       stopLoss: stopLossPrice,
       takeProfit1: tp1Price || entryPrice + (isLong ? tp1Pips : -tp1Pips) / pipMultiplier,
