@@ -6,7 +6,14 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
+    console.log('[History API] User auth check:', {
+      hasUser: !!user,
+      userId: user?.id?.slice(0, 8) + '...',
+      authError: authError?.message,
+    });
+
     if (authError || !user) {
+      console.error('[History API] Auth failed:', authError?.message);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -22,9 +29,15 @@ export async function GET(request: NextRequest) {
       .range(offset, offset + limit - 1);
 
     if (error) {
-      console.error('Failed to fetch history:', error);
+      console.error('[History API] Query failed:', error);
       return NextResponse.json({ error: 'Failed to fetch history' }, { status: 500 });
     }
+
+    console.log('[History API] Returning:', {
+      userId: user.id.slice(0, 8) + '...',
+      jobsCount: jobs?.length || 0,
+      total: count || 0,
+    });
 
     return NextResponse.json({
       jobs: jobs || [],
@@ -33,7 +46,7 @@ export async function GET(request: NextRequest) {
       offset,
     });
   } catch (error) {
-    console.error('History API error:', error);
+    console.error('[History API] Exception:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

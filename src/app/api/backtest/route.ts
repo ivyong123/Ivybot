@@ -8,7 +8,14 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
+    console.log('[Backtest API] User auth check:', {
+      hasUser: !!user,
+      userId: user?.id?.slice(0, 8) + '...',
+      authError: authError?.message,
+    });
+
     if (authError || !user) {
+      console.error('[Backtest API] Auth failed:', authError?.message);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
