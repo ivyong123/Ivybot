@@ -350,12 +350,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { message, kb_type } = validationResult.data;
+    const { message, conversation_id, kb_type } = validationResult.data;
+
+    // Generate or use conversation ID for memory
+    const convId = conversation_id || `conv_${user.id}_${Date.now()}`;
 
     // Build messages array
     const messages: ChatMessage[] = [
       { role: 'system', content: CHAT_SYSTEM_PROMPT },
     ];
+
+    // Load conversation history from database for memory
+    const { createAdminClient } = await import('@/lib/supabase/admin');
+    const adminSupabase = createAdminClient();
+
+    // Get previous messages for this conversation (last 10 messages for context)
+    const { data: historyMessages } = await adminSupabase
+      .from('n8n_chat_histories')
+      .select('message')
+      .eq('session_id', convId)
+      .order('id', { ascending: true })
+      .limit(10);
+
+    if (historyMessages && historyMessages.length > 0) {
+      console.log(`[Chat] Loading ${historyMessages.length} previous messages for context`);
+      for (const row of historyMessages) {
+        try {
+          const msg = typeof row.message === 'string' ? JSON.parse(row.message) : row.message;
+          if (msg.role && msg.content) {
+            messages.push({ role: msg.role, content: msg.content });
+          }
+        } catch {
+          // Skip invalid messages
+        }
+      }
+    }
 
     // Add user's analysis history context if relevant
     const analysisKeywords = ['my', 'previous', 'history', 'past', 'analysis', 'analyzed', 'portfolio'];
@@ -375,6 +404,12 @@ export async function POST(request: NextRequest) {
 
     // Add user message
     messages.push({ role: 'user', content: message });
+
+    // Save user message to conversation history
+    await adminSupabase.from('n8n_chat_histories').insert({
+      session_id: convId,
+      message: JSON.stringify({ role: 'user', content: message }),
+    });
 
     // Track tools used and sources
     const toolsUsed: string[] = [];
@@ -523,11 +558,18 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      // Save assistant response to conversation history
+      await adminSupabase.from('n8n_chat_histories').insert({
+        session_id: convId,
+        message: JSON.stringify({ role: 'assistant', content: finalContent }),
+      });
+
       // Dedupe sources
       const uniqueSources = [...new Set(sources)];
 
       return NextResponse.json({
         message: finalContent,
+        conversation_id: convId,
         kb_used: uniqueSources.length > 0,
         sources: uniqueSources,
         tools_used: [...new Set(toolsUsed)],
@@ -550,8 +592,16 @@ export async function POST(request: NextRequest) {
       const finalContent = finalResponse.choices[0]?.message?.content;
       if (finalContent) {
         console.log('[Chat] Got final response without tools');
+
+        // Save to conversation history
+        await adminSupabase.from('n8n_chat_histories').insert({
+          session_id: convId,
+          message: JSON.stringify({ role: 'assistant', content: finalContent }),
+        });
+
         return NextResponse.json({
           message: finalContent,
+          conversation_id: convId,
           kb_used: sources.length > 0,
           sources: [...new Set(sources)],
           tools_used: [...new Set(toolsUsed)],
@@ -563,6 +613,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       message: 'I apologize, but I\'m having trouble processing your request. Please try asking a simpler question.',
+      conversation_id: convId,
       kb_used: false,
       sources: [],
       tools_used: toolsUsed,

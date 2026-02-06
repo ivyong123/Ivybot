@@ -57,6 +57,7 @@ export function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -86,6 +87,7 @@ export function ChatInterface() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: userMessage.content,
+          conversation_id: conversationId,
           include_kb: true,
         }),
       });
@@ -98,6 +100,11 @@ export function ChatInterface() {
 
       if (!response.ok) {
         throw new Error(data.message || data.error || 'Failed to get response');
+      }
+
+      // Save conversation ID for memory
+      if (data.conversation_id) {
+        setConversationId(data.conversation_id);
       }
 
       const assistantMessage: Message = {

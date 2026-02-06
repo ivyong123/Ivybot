@@ -43,7 +43,21 @@ export interface ToolExecutionResult {
   errors: string[];
 }
 
-// Execute a single tool
+// Timeout wrapper for tool execution
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  toolName: string
+): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`Tool ${toolName} timed out after ${timeoutMs}ms`)), timeoutMs)
+    ),
+  ]);
+}
+
+// Execute a single tool with timeout
 async function executeTool(
   toolName: string,
   args: Record<string, unknown>
@@ -209,16 +223,34 @@ export async function executeToolCalls(
         };
       }
 
-      const { result, error } = await executeTool(toolCall.function.name, args);
-      const duration = Date.now() - startTime;
+      // Execute tool with 15 second timeout to prevent hanging
+      const TOOL_TIMEOUT_MS = 15000;
+      try {
+        const { result, error } = await withTimeout(
+          executeTool(toolCall.function.name, args),
+          TOOL_TIMEOUT_MS,
+          toolCall.function.name
+        );
+        const duration = Date.now() - startTime;
 
-      return {
-        toolCall,
-        args,
-        result,
-        error,
-        duration,
-      };
+        return {
+          toolCall,
+          args,
+          result,
+          error,
+          duration,
+        };
+      } catch (timeoutError) {
+        const duration = Date.now() - startTime;
+        console.error(`[Executor] Tool ${toolCall.function.name} timed out after ${duration}ms`);
+        return {
+          toolCall,
+          args,
+          result: null,
+          error: `Tool timed out after ${TOOL_TIMEOUT_MS}ms`,
+          duration,
+        };
+      }
     })
   );
 

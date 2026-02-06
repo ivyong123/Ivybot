@@ -157,19 +157,38 @@ interface YahooV6Response {
   };
 }
 
-async function fetchYahooV6(symbol: string, modules: string[], retries = 3): Promise<YahooV6Response> {
+// Fetch with timeout helper
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = 5000): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Yahoo API timeout after ${timeoutMs}ms`);
+    }
+    throw error;
+  }
+}
+
+async function fetchYahooV6(symbol: string, modules: string[], retries = 2): Promise<YahooV6Response> {
   // v6 quoteSummary endpoint
   const url = `${YAHOO_V6_API}/quoteSummary/${symbol.toUpperCase()}?modules=${modules.join(',')}`;
 
   for (let attempt = 0; attempt < retries; attempt++) {
     if (attempt > 0) {
-      await sleep(1000 * Math.pow(2, attempt - 1));
+      await sleep(500 * attempt); // Shorter backoff
     }
 
     try {
-      const response = await fetch(url, {
-        headers: getHeaders(),
-      });
+      const response = await fetchWithTimeout(url, { headers: getHeaders() }, 5000);
 
       if (response.ok) {
         return response.json();
@@ -180,23 +199,23 @@ async function fetchYahooV6(symbol: string, modules: string[], retries = 3): Pro
         continue;
       }
 
-      // Try alternative v8 endpoint
+      // Yahoo API often returns 401/403 now - don't retry, just return empty
       if (response.status === 401 || response.status === 403) {
-        const v8Url = `${YAHOO_V8_API}/chart/${symbol.toUpperCase()}?interval=1d&range=1mo`;
-        const v8Response = await fetch(v8Url, { headers: getHeaders() });
-        if (v8Response.ok) {
-          // Return minimal data structure from chart API
-          return { quoteSummary: { result: [] } };
-        }
+        console.log(`Yahoo API auth error (${response.status}) for ${symbol} - API may be blocked`);
+        return { quoteSummary: { result: [] } };
       }
 
       throw new Error(`Yahoo API error: ${response.status}`);
     } catch (error) {
-      if (attempt === retries - 1) throw error;
+      console.error(`Yahoo API attempt ${attempt + 1} failed:`, error instanceof Error ? error.message : error);
+      if (attempt === retries - 1) {
+        // Return empty instead of throwing to prevent hanging
+        return { quoteSummary: { result: [] } };
+      }
     }
   }
 
-  throw new Error('Yahoo API: max retries exceeded');
+  return { quoteSummary: { result: [] } };
 }
 
 // Legacy function for backward compatibility
