@@ -410,6 +410,7 @@ export async function POST(request: NextRequest) {
       // Check if AI wants to use tools
       if (choice.finish_reason === 'tool_calls' && assistantMessage.tool_calls?.length) {
         toolRounds++;
+        console.log(`[Chat] AI requested ${assistantMessage.tool_calls.length} tool(s) in round ${toolRounds}`);
 
         // Add assistant message with tool calls
         messages.push({
@@ -424,11 +425,13 @@ export async function POST(request: NextRequest) {
         for (const toolCall of assistantMessage.tool_calls) {
           const toolName = toolCall.function.name;
           toolsUsed.push(toolName);
+          console.log(`[Chat] Tool call: ${toolName}, id: ${toolCall.id}`);
 
           let args: Record<string, unknown>;
           try {
             args = JSON.parse(toolCall.function.arguments);
-          } catch {
+          } catch (parseError) {
+            console.error(`[Chat] Failed to parse tool arguments for ${toolName}:`, parseError);
             toolResults.push({
               tool_call_id: toolCall.id,
               role: 'tool',
@@ -437,50 +440,68 @@ export async function POST(request: NextRequest) {
             continue;
           }
 
-          console.log(`[Chat] Executing tool: ${toolName}`, args);
+          console.log(`[Chat] Executing tool: ${toolName}`, JSON.stringify(args));
 
           // Handle web_search separately
-          if (toolName === 'web_search') {
-            sources.push('web_search');
-            const searchResults = await executeWebSearch(args.query as string);
+          try {
+            if (toolName === 'web_search') {
+              sources.push('web_search');
+              const searchResults = await executeWebSearch(args.query as string);
+              console.log(`[Chat] Web search completed, result length: ${searchResults.length}`);
+              toolResults.push({
+                tool_call_id: toolCall.id,
+                role: 'tool',
+                content: searchResults,
+              });
+            } else {
+              // Use the standard executor for other tools
+              const executionResult = await executeToolCalls([
+                {
+                  id: toolCall.id,
+                  type: 'function',
+                  function: {
+                    name: toolName,
+                    arguments: toolCall.function.arguments,
+                  },
+                },
+              ]);
+
+              console.log(`[Chat] Tool ${toolName} executed, results: ${executionResult.toolResults.length}, errors: ${executionResult.errors.length}`);
+              if (executionResult.errors.length > 0) {
+                console.error(`[Chat] Tool ${toolName} errors:`, executionResult.errors);
+              }
+
+              // Track source type
+              if (toolName === 'search_trading_knowledge') {
+                sources.push('knowledge_base');
+              } else if (toolName.startsWith('get_stock') || toolName.startsWith('get_forex') ||
+                         toolName.includes('earnings') || toolName.includes('analyst') ||
+                         toolName.includes('news') || toolName.includes('historical') ||
+                         toolName.includes('economic')) {
+                sources.push('market_data');
+              }
+
+              // Add tool results
+              for (const result of executionResult.toolResults) {
+                console.log(`[Chat] Tool result for ${toolCall.id}: ${result.content.slice(0, 200)}...`);
+                toolResults.push({
+                  tool_call_id: result.tool_call_id,
+                  role: 'tool',
+                  content: result.content,
+                });
+              }
+            }
+          } catch (toolError) {
+            console.error(`[Chat] Tool ${toolName} threw error:`, toolError);
             toolResults.push({
               tool_call_id: toolCall.id,
               role: 'tool',
-              content: searchResults,
+              content: JSON.stringify({ error: `Tool execution failed: ${toolError instanceof Error ? toolError.message : 'Unknown error'}` }),
             });
-          } else {
-            // Use the standard executor for other tools
-            const executionResult = await executeToolCalls([
-              {
-                id: toolCall.id,
-                type: 'function',
-                function: {
-                  name: toolName,
-                  arguments: toolCall.function.arguments,
-                },
-              },
-            ]);
-
-            // Track source type
-            if (toolName === 'search_trading_knowledge') {
-              sources.push('knowledge_base');
-            } else if (toolName.startsWith('get_stock') || toolName.startsWith('get_forex') ||
-                       toolName.includes('earnings') || toolName.includes('analyst') ||
-                       toolName.includes('news') || toolName.includes('historical') ||
-                       toolName.includes('economic')) {
-              sources.push('market_data');
-            }
-
-            // Add tool results
-            for (const result of executionResult.toolResults) {
-              toolResults.push({
-                tool_call_id: result.tool_call_id,
-                role: 'tool',
-                content: result.content,
-              });
-            }
           }
         }
+
+        console.log(`[Chat] Round ${toolRounds} complete. Tool results: ${toolResults.length}`);
 
         // Add all tool results to messages
         for (const result of toolResults) {
@@ -513,7 +534,33 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // If we hit max tool rounds, return what we have
+    // If we hit max tool rounds, log it and return what we have
+    console.error('[Chat] Hit max tool rounds limit. Tools used:', toolsUsed);
+    console.error('[Chat] Last messages count:', messages.length);
+
+    // Try one more time without tools to get a final response
+    try {
+      console.log('[Chat] Attempting final response without tools...');
+      const finalResponse = await chatCompletion(messages, {
+        taskType: 'chat',
+        maxTokens: 2048,
+        // No tools - force a text response
+      });
+
+      const finalContent = finalResponse.choices[0]?.message?.content;
+      if (finalContent) {
+        console.log('[Chat] Got final response without tools');
+        return NextResponse.json({
+          message: finalContent,
+          kb_used: sources.length > 0,
+          sources: [...new Set(sources)],
+          tools_used: [...new Set(toolsUsed)],
+        });
+      }
+    } catch (err) {
+      console.error('[Chat] Final response attempt failed:', err);
+    }
+
     return NextResponse.json({
       message: 'I apologize, but I\'m having trouble processing your request. Please try asking a simpler question.',
       kb_used: false,
