@@ -265,19 +265,22 @@ export function BacktestDashboard() {
               </select>
             </div>
 
-            {/* Symbol */}
+            {/* Symbol - Text input with datalist for suggestions */}
             <div>
               <label className="text-sm text-muted-foreground block mb-2">Symbol</label>
-              <select
+              <input
+                type="text"
+                list="symbol-suggestions"
                 value={symbolFilter}
-                onChange={(e) => setSymbolFilter(e.target.value)}
+                onChange={(e) => setSymbolFilter(e.target.value.toUpperCase())}
+                placeholder="e.g., AAPL, EUR/USD"
                 className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm"
-              >
-                <option value="">All Symbols</option>
+              />
+              <datalist id="symbol-suggestions">
                 {symbols.map((s) => (
-                  <option key={s} value={s}>{s}</option>
+                  <option key={s} value={s} />
                 ))}
-              </select>
+              </datalist>
             </div>
 
             {/* Status */}

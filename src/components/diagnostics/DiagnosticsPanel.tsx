@@ -258,24 +258,6 @@ export function DiagnosticsPanel() {
         </div>
       </div>
 
-      {/* Help Section */}
-      <div className="glass-card p-6">
-        <h3 className="text-lg font-semibold mb-4">Troubleshooting</h3>
-        <div className="space-y-3 text-sm text-muted-foreground">
-          <p>
-            <strong className="text-foreground">API Key Issues:</strong> Check your <code className="bg-muted px-1 rounded">.env.local</code> file has all required API keys.
-          </p>
-          <p>
-            <strong className="text-foreground">Polygon Free Tier:</strong> Real-time snapshots require a paid plan. Historical data works on free tier.
-          </p>
-          <p>
-            <strong className="text-foreground">Unusual Whales:</strong> Requires a paid subscription ($49/month) for full API access.
-          </p>
-          <p>
-            <strong className="text-foreground">Empty Knowledge Base:</strong> You need to populate the Supabase <code className="bg-muted px-1 rounded">documents</code> table with trading content.
-          </p>
-        </div>
-      </div>
     </div>
   );
 }
