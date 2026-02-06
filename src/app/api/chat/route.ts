@@ -383,13 +383,19 @@ export async function POST(request: NextRequest) {
     // Tool execution loop
     let toolRounds = 0;
 
+    console.log('[Chat] Starting chat processing for message:', message.slice(0, 100));
+
     while (toolRounds < MAX_TOOL_ROUNDS) {
+      console.log(`[Chat] Tool round ${toolRounds + 1}/${MAX_TOOL_ROUNDS}`);
+
       // Get AI response with tools available
       const response = await chatCompletion(messages, {
         taskType: 'chat',
         maxTokens: 2048,
         tools: CHAT_TOOLS,
       });
+
+      console.log('[Chat] Got response from AI, finish_reason:', response.choices[0]?.finish_reason);
 
       const choice = response.choices[0];
       const assistantMessage = choice?.message;
@@ -517,8 +523,16 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Chat API error:', error);
+    console.error('Error details:', error instanceof Error ? error.stack : 'Unknown error type');
+
+    // Return a user-friendly error message
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+
     return NextResponse.json(
-      { error: 'Internal server error' },
+      {
+        error: errorMessage,
+        message: 'I apologize, but I encountered an error processing your request. Please try again.',
+      },
       { status: 500 }
     );
   }

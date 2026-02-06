@@ -55,6 +55,13 @@ export async function GET(request: NextRequest) {
     // Get backtest summary with filters
     const summary = await getBacktestSummary(user.id, filters);
 
+    console.log('[Backtest API] Summary stats:', {
+      totalTrades: summary.stats.total_trades,
+      winRate: summary.stats.win_rate,
+      pendingTrades: summary.stats.pending_trades,
+      recentTradesCount: summary.recent_trades.length,
+    });
+
     return NextResponse.json(summary);
   } catch (error) {
     console.error('Backtest API error:', error);

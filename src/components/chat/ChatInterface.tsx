@@ -96,10 +96,14 @@ export function ChatInterface() {
 
       const data = await response.json();
 
+      if (!response.ok) {
+        throw new Error(data.message || data.error || 'Failed to get response');
+      }
+
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: data.message,
+        content: data.message || 'I received your message but could not generate a response. Please try again.',
         timestamp: new Date(),
         kbUsed: data.kb_used,
         sources: data.sources || [],
@@ -109,10 +113,11 @@ export function ChatInterface() {
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
       console.error('Chat error:', error);
+      const errorContent = error instanceof Error ? error.message : 'Sorry, I encountered an error. Please try again.';
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
+        content: errorContent,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);

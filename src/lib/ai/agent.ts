@@ -531,6 +531,59 @@ function parseRecommendation(
       currentPrice = parsed.stock_result.currentPrice;
     }
 
+    // Extract entry_price, stop_loss, price_target from forex_setup or stock_result if top-level is missing
+    // This ensures TradeRecommendation always has these fields for backtesting
+    let entryPrice = parsed.entry_price || null;
+    let stopLoss = parsed.stop_loss || null;
+    let priceTarget = parsed.price_target || null;
+
+    if (forexSetup?.trade) {
+      // For forex, use forex_setup values if top-level is missing
+      if (!entryPrice && forexSetup.trade.entryPrice) {
+        entryPrice = forexSetup.trade.entryPrice;
+      }
+      if (!stopLoss && forexSetup.trade.stopLoss) {
+        stopLoss = forexSetup.trade.stopLoss;
+      }
+      // For target, use TP3 (extended target) as the main price_target
+      if (!priceTarget && forexSetup.trade.takeProfit3) {
+        priceTarget = forexSetup.trade.takeProfit3;
+      } else if (!priceTarget && forexSetup.trade.takeProfit2) {
+        priceTarget = forexSetup.trade.takeProfit2;
+      } else if (!priceTarget && forexSetup.trade.takeProfit1) {
+        priceTarget = forexSetup.trade.takeProfit1;
+      }
+    }
+
+    // For stock, use stock_result values if top-level is missing
+    if (parsed.stock_result?.execution) {
+      const exec = parsed.stock_result.execution;
+      if (!entryPrice && exec.entryPrice) {
+        entryPrice = exec.entryPrice;
+      }
+      // stopLoss and profitTarget are strings in stock_result, extract numbers
+      if (!stopLoss && exec.stopLoss) {
+        const slMatch = exec.stopLoss.match(/\$?([\d.]+)/);
+        if (slMatch) stopLoss = parseFloat(slMatch[1]);
+      }
+      if (!priceTarget && exec.profitTarget) {
+        const ptMatch = exec.profitTarget.match(/\$?([\d.]+)/);
+        if (ptMatch) priceTarget = parseFloat(ptMatch[1]);
+      }
+      // Also try to get from riskReward.breakeven as fallback for target
+      if (!priceTarget && parsed.stock_result.riskReward?.breakeven) {
+        priceTarget = parsed.stock_result.riskReward.breakeven;
+      }
+    }
+
+    // For options_strategy, use legs for backtesting entry
+    if (!entryPrice && fixedOptionsStrategy?.legs?.length) {
+      // Use current price as entry for options (since options entry is the premium)
+      if (currentPrice) {
+        entryPrice = currentPrice;
+      }
+    }
+
     // Validate and return
     return {
       symbol: parsed.symbol || symbol.toUpperCase(),
@@ -538,9 +591,9 @@ function parseRecommendation(
       recommendation: finalRecommendation,
       confidence: parsed.confidence || 50,
       current_price: currentPrice,
-      price_target: parsed.price_target || null,
-      stop_loss: parsed.stop_loss || null,
-      entry_price: parsed.entry_price || null,
+      price_target: priceTarget,
+      stop_loss: stopLoss,
+      entry_price: entryPrice,
       timeframe: parsed.timeframe || 'Unknown',
       reasoning: finalReasoning,
       key_factors: parsed.key_factors || [],

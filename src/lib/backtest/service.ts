@@ -23,6 +23,74 @@ export async function savePrediction(
   // Calculate expiry date based on timeframe
   const expiryDate = calculateExpiryDate(recommendation.timeframe);
 
+  // Get entry price, stop loss, and target - with forex_setup fallback
+  let entryPrice = recommendation.entry_price || 0;
+  let stopLoss = recommendation.stop_loss || 0;
+  let targetPrice = recommendation.price_target || 0;
+
+  // For forex, ensure we get values from forex_setup if top-level is missing
+  if (recommendation.forex_setup?.trade) {
+    const trade = recommendation.forex_setup.trade;
+    if (!entryPrice || entryPrice === 0) {
+      entryPrice = trade.entryPrice || 0;
+    }
+    if (!stopLoss || stopLoss === 0) {
+      stopLoss = trade.stopLoss || 0;
+    }
+    // Use TP3 as the main target (extended target)
+    if (!targetPrice || targetPrice === 0) {
+      targetPrice = trade.takeProfit3 || trade.takeProfit2 || trade.takeProfit1 || 0;
+    }
+  }
+
+  // For stock, ensure we get values from stock_result if top-level is missing
+  if (recommendation.stock_result?.execution) {
+    const exec = recommendation.stock_result.execution;
+    if (!entryPrice || entryPrice === 0) {
+      entryPrice = exec.entryPrice || 0;
+    }
+    // stopLoss and profitTarget are strings, extract numbers
+    if (!stopLoss || stopLoss === 0) {
+      const slMatch = exec.stopLoss?.match(/\$?([\d.]+)/);
+      if (slMatch) stopLoss = parseFloat(slMatch[1]);
+    }
+    if (!targetPrice || targetPrice === 0) {
+      const ptMatch = exec.profitTarget?.match(/\$?([\d.]+)/);
+      if (ptMatch) targetPrice = parseFloat(ptMatch[1]);
+    }
+    // Fallback to breakeven
+    if (!targetPrice || targetPrice === 0) {
+      targetPrice = recommendation.stock_result.riskReward?.breakeven || 0;
+    }
+  }
+
+  // For options, use current price as entry if not set
+  if ((!entryPrice || entryPrice === 0) && recommendation.current_price) {
+    entryPrice = recommendation.current_price;
+  }
+
+  // Log what we're trying to save
+  console.log('[Backtest] savePrediction called:', {
+    symbol: recommendation.symbol,
+    recommendation: recommendation.recommendation,
+    entryPrice,
+    stopLoss,
+    targetPrice,
+    hasForexSetup: !!recommendation.forex_setup,
+    hasOptionsStrategy: !!recommendation.options_strategy,
+  });
+
+  // Skip saving if we don't have valid prices or if it's a "wait" recommendation
+  if (recommendation.recommendation === 'wait' || recommendation.recommendation === 'hold') {
+    console.log('[Backtest] Skipping save - recommendation is wait/hold');
+    return null;
+  }
+
+  if (entryPrice === 0 || stopLoss === 0 || targetPrice === 0) {
+    console.warn('[Backtest] Skipping save - missing required prices:', { entryPrice, stopLoss, targetPrice });
+    return null;
+  }
+
   const record: Partial<BacktestRecord> = {
     job_id: jobId,
     user_id: userId,
@@ -30,9 +98,9 @@ export async function savePrediction(
     analysis_type: recommendation.analysis_type as 'stock' | 'forex',
     prediction_date: new Date().toISOString(),
     predicted_direction: getDirection(recommendation.recommendation),
-    entry_price: recommendation.entry_price || 0,
-    target_price: recommendation.price_target || 0,
-    stop_loss: recommendation.stop_loss || 0,
+    entry_price: entryPrice,
+    target_price: targetPrice,
+    stop_loss: stopLoss,
     timeframe: recommendation.timeframe,
     expiry_date: expiryDate,
     confidence: recommendation.confidence,
@@ -47,11 +115,11 @@ export async function savePrediction(
     record.options_expiration = recommendation.options_strategy.legs?.[0]?.expiration;
   }
 
-  // Add forex-specific fields
-  if (recommendation.forex_setup) {
-    record.tp1_price = recommendation.forex_setup.trade?.takeProfit1;
-    record.tp2_price = recommendation.forex_setup.trade?.takeProfit2;
-    record.tp3_price = recommendation.forex_setup.trade?.takeProfit3;
+  // Add forex-specific fields (TP levels)
+  if (recommendation.forex_setup?.trade) {
+    record.tp1_price = recommendation.forex_setup.trade.takeProfit1;
+    record.tp2_price = recommendation.forex_setup.trade.takeProfit2;
+    record.tp3_price = recommendation.forex_setup.trade.takeProfit3;
   }
 
   const { data, error } = await supabase
@@ -61,9 +129,19 @@ export async function savePrediction(
     .single();
 
   if (error) {
-    console.error('Failed to save prediction:', error);
+    console.error('[Backtest] Failed to save prediction:', error);
+    console.error('[Backtest] Record that failed:', record);
     return null;
   }
+
+  console.log('[Backtest] Successfully saved prediction:', {
+    id: data.id,
+    symbol: data.symbol,
+    direction: data.predicted_direction,
+    entry: data.entry_price,
+    target: data.target_price,
+    stop: data.stop_loss,
+  });
 
   return data;
 }
@@ -249,7 +327,15 @@ export async function getBacktestStats(userId: string, filters?: BacktestFilters
 
   const { data: records, error } = await query.order('created_at', { ascending: false });
 
+  console.log('[Backtest] getBacktestStats query result:', {
+    userId,
+    filters,
+    recordsCount: records?.length || 0,
+    error: error?.message,
+  });
+
   if (error || !records) {
+    console.error('[Backtest] getBacktestStats error or no records:', error);
     return getEmptyStats();
   }
 
