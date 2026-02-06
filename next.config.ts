@@ -7,6 +7,12 @@ const nextConfig: NextConfig = {
       bodySizeLimit: '2mb',
     },
   },
+  // Enable verbose logging in production
+  logging: {
+    fetches: {
+      fullUrl: true,
+    },
+  },
   // Image optimization
   images: {
     remotePatterns: [
