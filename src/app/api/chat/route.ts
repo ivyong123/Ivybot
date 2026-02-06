@@ -191,7 +191,8 @@ async function searchWeb(query: string): Promise<{ summary: string; results: str
   try {
     // Use DuckDuckGo instant answer API (free, no key required)
     const response = await fetch(
-      `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`
+      `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`,
+      { signal: AbortSignal.timeout(10000) } // 10 second timeout
     );
 
     if (!response.ok) {
@@ -220,10 +221,21 @@ async function searchWeb(query: string): Promise<{ summary: string; results: str
       results.unshift(data.Answer);
     }
 
+    // If no results from DuckDuckGo, return a message suggesting alternatives
+    if (!summary && results.length === 0) {
+      return {
+        summary: '',
+        results: [
+          `I searched for "${query}" but couldn't find specific real-time data.`,
+          'Note: For cryptocurrency prices like Bitcoin, I recommend checking dedicated crypto platforms like CoinGecko or CoinMarketCap for accurate real-time prices.',
+        ],
+      };
+    }
+
     return { summary, results };
   } catch (error) {
     console.error('Web search error:', error);
-    return { summary: '', results: ['Web search temporarily unavailable.'] };
+    return { summary: '', results: ['Web search temporarily unavailable. Please try again.'] };
   }
 }
 
@@ -326,6 +338,18 @@ You have access to the following tools to help users:
 // Maximum tool execution rounds to prevent infinite loops
 const MAX_TOOL_ROUNDS = 3;
 
+// Timeout wrapper for AI calls
+async function withAITimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  operation: string
+): Promise<T> {
+  const timeoutPromise = new Promise<T>((_, reject) =>
+    setTimeout(() => reject(new Error(`${operation} timed out after ${timeoutMs}ms`)), timeoutMs)
+  );
+  return Promise.race([promise, timeoutPromise]);
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Get authenticated user
@@ -415,20 +439,48 @@ export async function POST(request: NextRequest) {
     const toolsUsed: string[] = [];
     const sources: string[] = [];
 
+    // Track partial content in case we need to return early
+    let partialContent = '';
+    let lastToolData: Record<string, unknown> = {};
+
     // Tool execution loop
     let toolRounds = 0;
+    const AI_TIMEOUT_MS = 25000; // 25 second timeout per AI call
 
     console.log('[Chat] Starting chat processing for message:', message.slice(0, 100));
 
     while (toolRounds < MAX_TOOL_ROUNDS) {
       console.log(`[Chat] Tool round ${toolRounds + 1}/${MAX_TOOL_ROUNDS}`);
 
-      // Get AI response with tools available
-      const response = await chatCompletion(messages, {
-        taskType: 'chat',
-        maxTokens: 2048,
-        tools: CHAT_TOOLS,
-      });
+      // Get AI response with tools available (with timeout)
+      let response;
+      try {
+        response = await withAITimeout(
+          chatCompletion(messages, {
+            taskType: 'chat',
+            maxTokens: 2048,
+            tools: CHAT_TOOLS,
+          }),
+          AI_TIMEOUT_MS,
+          `AI call round ${toolRounds + 1}`
+        );
+      } catch (timeoutErr) {
+        console.error('[Chat] AI call timed out:', timeoutErr);
+        // If we have tool data, try to construct a response
+        if (Object.keys(lastToolData).length > 0) {
+          const toolDataStr = JSON.stringify(lastToolData, null, 2);
+          return NextResponse.json({
+            message: partialContent
+              ? `${partialContent}\n\nI found some data but couldn't fully process it. Here's what I found:\n\`\`\`\n${toolDataStr.slice(0, 1000)}\n\`\`\``
+              : `I found some data but the request timed out. Here's the raw data:\n\`\`\`\n${toolDataStr.slice(0, 1000)}\n\`\`\``,
+            conversation_id: convId,
+            kb_used: sources.length > 0,
+            sources: [...new Set(sources)],
+            tools_used: [...new Set(toolsUsed)],
+          });
+        }
+        throw timeoutErr;
+      }
 
       console.log('[Chat] Got response from AI, finish_reason:', response.choices[0]?.finish_reason);
 
@@ -446,6 +498,11 @@ export async function POST(request: NextRequest) {
       if (choice.finish_reason === 'tool_calls' && assistantMessage.tool_calls?.length) {
         toolRounds++;
         console.log(`[Chat] AI requested ${assistantMessage.tool_calls.length} tool(s) in round ${toolRounds}`);
+
+        // Track partial content from AI
+        if (assistantMessage.content) {
+          partialContent = assistantMessage.content;
+        }
 
         // Add assistant message with tool calls
         messages.push({
@@ -483,6 +540,8 @@ export async function POST(request: NextRequest) {
               sources.push('web_search');
               const searchResults = await executeWebSearch(args.query as string);
               console.log(`[Chat] Web search completed, result length: ${searchResults.length}`);
+              // Track for fallback response
+              lastToolData[`web_search_${args.query}`] = searchResults;
               toolResults.push({
                 tool_call_id: toolCall.id,
                 role: 'tool',
@@ -516,9 +575,15 @@ export async function POST(request: NextRequest) {
                 sources.push('market_data');
               }
 
-              // Add tool results
+              // Add tool results and track for fallback
               for (const result of executionResult.toolResults) {
                 console.log(`[Chat] Tool result for ${toolCall.id}: ${result.content.slice(0, 200)}...`);
+                // Track for fallback response
+                try {
+                  lastToolData[toolName] = JSON.parse(result.content);
+                } catch {
+                  lastToolData[toolName] = result.content.slice(0, 500);
+                }
                 toolResults.push({
                   tool_call_id: result.tool_call_id,
                   role: 'tool',
@@ -549,7 +614,19 @@ export async function POST(request: NextRequest) {
 
       // AI is done (no more tool calls)
       // Return the final response
-      const finalContent = assistantMessage.content;
+      let finalContent = assistantMessage.content;
+
+      // If no content but we have tool data, construct a fallback response
+      if (!finalContent && Object.keys(lastToolData).length > 0) {
+        console.log('[Chat] No AI content but have tool data, constructing fallback');
+        const toolSummary = Object.entries(lastToolData)
+          .map(([tool, data]) => {
+            if (typeof data === 'string') return data;
+            return JSON.stringify(data, null, 2).slice(0, 800);
+          })
+          .join('\n\n');
+        finalContent = `Here's what I found:\n\n${toolSummary}`;
+      }
 
       if (!finalContent) {
         return NextResponse.json(
