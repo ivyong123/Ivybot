@@ -156,6 +156,16 @@ async function runAnalysisInBackground(
 
       // Save prediction for backtesting (get user_id from job)
       if (result.recommendation) {
+        console.log('[Route] Attempting to save prediction for backtesting...', {
+          symbol: result.recommendation.symbol,
+          type: result.recommendation.analysis_type,
+          recommendation: result.recommendation.recommendation,
+          hasEntryPrice: !!result.recommendation.entry_price,
+          hasStopLoss: !!result.recommendation.stop_loss,
+          hasPriceTarget: !!result.recommendation.price_target,
+          hasCurrentPrice: !!result.recommendation.current_price,
+        });
+
         try {
           const adminClient = createAdminClient();
           const { data: job } = await adminClient
@@ -165,13 +175,21 @@ async function runAnalysisInBackground(
             .single();
 
           if (job?.user_id) {
-            await savePrediction(jobId, job.user_id, result.recommendation);
-            console.log('[Route] Saved prediction for backtesting');
+            const savedRecord = await savePrediction(jobId, job.user_id, result.recommendation);
+            if (savedRecord) {
+              console.log('[Route] Successfully saved prediction:', savedRecord.id);
+            } else {
+              console.log('[Route] Prediction was not saved (likely wait/hold or missing prices)');
+            }
+          } else {
+            console.error('[Route] No user_id found for job');
           }
         } catch (backTestError) {
           console.error('[Route] Failed to save prediction:', backTestError);
           // Don't fail the job if backtest save fails
         }
+      } else {
+        console.log('[Route] No recommendation to save for backtesting');
       }
     }
   } catch (error) {

@@ -64,19 +64,49 @@ export async function savePrediction(
     }
   }
 
-  // For options, use current price as entry if not set
+  // For options/stock, use current price as entry if not set
   if ((!entryPrice || entryPrice === 0) && recommendation.current_price) {
     entryPrice = recommendation.current_price;
+  }
+
+  // For options strategies, derive stop/target from the strategy if not set
+  if (recommendation.options_strategy && recommendation.current_price) {
+    const currentPrice = recommendation.current_price;
+
+    // If no stop loss, use 5% below entry for bullish, 5% above for bearish
+    if (!stopLoss || stopLoss === 0) {
+      const isBullish = ['strong_buy', 'buy'].includes(recommendation.recommendation);
+      stopLoss = isBullish
+        ? currentPrice * 0.95  // 5% stop loss for longs
+        : currentPrice * 1.05; // 5% stop loss for shorts
+    }
+
+    // If no target, use price_target from options or derive from strategy
+    if (!targetPrice || targetPrice === 0) {
+      // Try to get breakeven from options strategy
+      if (recommendation.options_strategy.breakeven?.length > 0) {
+        targetPrice = recommendation.options_strategy.breakeven[0];
+      } else {
+        // Default: 10% target for bullish, -10% for bearish
+        const isBullish = ['strong_buy', 'buy'].includes(recommendation.recommendation);
+        targetPrice = isBullish
+          ? currentPrice * 1.10
+          : currentPrice * 0.90;
+      }
+    }
   }
 
   // Log what we're trying to save
   console.log('[Backtest] savePrediction called:', {
     symbol: recommendation.symbol,
+    analysisType: recommendation.analysis_type,
     recommendation: recommendation.recommendation,
     entryPrice,
     stopLoss,
     targetPrice,
+    currentPrice: recommendation.current_price,
     hasForexSetup: !!recommendation.forex_setup,
+    hasStockResult: !!recommendation.stock_result,
     hasOptionsStrategy: !!recommendation.options_strategy,
   });
 
@@ -86,9 +116,24 @@ export async function savePrediction(
     return null;
   }
 
-  if (entryPrice === 0 || stopLoss === 0 || targetPrice === 0) {
-    console.warn('[Backtest] Skipping save - missing required prices:', { entryPrice, stopLoss, targetPrice });
+  // For stock/options, we can save even with derived values
+  // Only skip if we truly have no prices at all
+  if (entryPrice === 0 && stopLoss === 0 && targetPrice === 0) {
+    console.warn('[Backtest] Skipping save - all prices are 0:', { entryPrice, stopLoss, targetPrice });
     return null;
+  }
+
+  // If we have entry but missing stop/target, use defaults based on direction
+  if (entryPrice > 0) {
+    const isBullish = ['strong_buy', 'buy'].includes(recommendation.recommendation);
+    if (stopLoss === 0) {
+      stopLoss = isBullish ? entryPrice * 0.95 : entryPrice * 1.05;
+      console.log('[Backtest] Derived stopLoss:', stopLoss);
+    }
+    if (targetPrice === 0) {
+      targetPrice = isBullish ? entryPrice * 1.10 : entryPrice * 0.90;
+      console.log('[Backtest] Derived targetPrice:', targetPrice);
+    }
   }
 
   const record: Partial<BacktestRecord> = {
