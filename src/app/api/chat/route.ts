@@ -8,7 +8,7 @@ import { z } from 'zod';
 
 const ChatRequestSchema = z.object({
   message: z.string().min(1).max(4000),
-  conversation_id: z.string().optional(),
+  conversation_id: z.string().nullable().optional(),
   include_kb: z.boolean().optional().default(true),
   kb_type: z.enum(['stock', 'forex']).optional().default('stock'),
 });
