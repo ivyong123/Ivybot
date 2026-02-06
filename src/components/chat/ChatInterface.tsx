@@ -92,14 +92,14 @@ export function ChatInterface() {
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to get response');
-      }
-
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || data.error || 'Failed to get response');
+        throw new Error(data.message || data.error || 'Failed to get response from AI');
+      }
+
+      if (!data.message) {
+        throw new Error('No response received from AI');
       }
 
       // Save conversation ID for memory
