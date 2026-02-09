@@ -206,8 +206,8 @@ export async function savePrediction(
     .single();
 
   if (error) {
-    console.error('[Backtest] Failed to save prediction:', error);
-    console.error('[Backtest] Record that failed:', record);
+    console.error('[Backtest] Failed to save prediction:', error.message, error.code, error.details, error.hint);
+    console.error('[Backtest] Record that failed:', JSON.stringify(record, null, 2));
     return null;
   }
 
@@ -730,6 +730,17 @@ export async function backfillPredictions(userId: string): Promise<{ created: nu
   }
 
   console.log(`[Backfill] Found ${jobs.length} completed jobs for user ${userId.slice(0, 8)}...`);
+  if (jobs.length > 0) {
+    console.log(`[Backfill] First job sample:`, {
+      id: jobs[0].id,
+      symbol: jobs[0].symbol,
+      analysis_type: jobs[0].analysis_type,
+      has_final_result: !!jobs[0].final_result,
+      final_result_type: typeof jobs[0].final_result,
+      recommendation: jobs[0].final_result?.recommendation,
+      has_symbol: !!jobs[0].final_result?.symbol,
+    });
+  }
 
   // Get existing backtest records to avoid duplicates
   const { data: existingRecords } = await supabase

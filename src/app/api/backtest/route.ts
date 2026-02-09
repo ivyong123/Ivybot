@@ -43,12 +43,15 @@ export async function GET(request: NextRequest) {
     }
 
     // Always backfill missing predictions (fast - skips existing records)
+    let backfillResult = { created: 0, skipped: 0, errors: 0 };
+    let backfillError: string | null = null;
     try {
-      const backfill = await backfillPredictions(user.id);
-      if (backfill.created > 0) {
-        console.log(`[Backtest] Auto-backfilled ${backfill.created} missing predictions for user ${user.id.slice(0, 8)}...`);
+      backfillResult = await backfillPredictions(user.id);
+      if (backfillResult.created > 0) {
+        console.log(`[Backtest] Auto-backfilled ${backfillResult.created} missing predictions for user ${user.id.slice(0, 8)}...`);
       }
     } catch (backfillErr) {
+      backfillError = backfillErr instanceof Error ? backfillErr.message : String(backfillErr);
       console.error('[Backtest] Backfill error (non-fatal):', backfillErr);
     }
 
@@ -85,7 +88,14 @@ export async function GET(request: NextRequest) {
       recentTradesCount: summary.recent_trades.length,
     });
 
-    return NextResponse.json(summary);
+    return NextResponse.json({
+      ...summary,
+      _debug: {
+        backfill: backfillResult,
+        backfillError,
+        userId: user.id.slice(0, 8) + '...',
+      },
+    });
   } catch (error) {
     console.error('Backtest API error:', error);
     return NextResponse.json(
