@@ -458,12 +458,18 @@ export function BacktestDashboard() {
                 <div key={symbol} className="p-3 rounded-lg glass-subtle">
                   <div className="flex items-center justify-between">
                     <span className="font-mono font-bold">{symbol}</span>
-                    <Badge className={data.win_rate >= 50 ? 'bg-emerald-500/20 text-emerald-500' : 'bg-red-500/20 text-red-500'}>
-                      {data.win_rate.toFixed(0)}%
+                    <Badge className={
+                      (data.wins + (data.losses || 0)) === 0
+                        ? 'bg-yellow-500/20 text-yellow-500'
+                        : data.win_rate >= 50
+                          ? 'bg-emerald-500/20 text-emerald-500'
+                          : 'bg-red-500/20 text-red-500'
+                    }>
+                      {(data.wins + (data.losses || 0)) === 0 ? 'Pending' : `${data.win_rate.toFixed(0)}%`}
                     </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {data.wins}W / {data.trades - data.wins}L
+                    {data.wins}W / {data.losses || 0}L{data.pending ? ` / ${data.pending}P` : ''}
                   </p>
                 </div>
               ))}

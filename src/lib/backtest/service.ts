@@ -535,15 +535,18 @@ export async function getBacktestSummary(userId: string, filters?: BacktestFilte
 
   const recentTrades = records || [];
 
-  // Group by symbol
-  const bySymbol: Record<string, { trades: number; wins: number; win_rate: number }> = {};
+  // Group by symbol - only count completed trades for win/loss stats
+  const bySymbol: Record<string, { trades: number; wins: number; losses: number; pending: number; win_rate: number }> = {};
   recentTrades.forEach(r => {
-    if (!bySymbol[r.symbol]) bySymbol[r.symbol] = { trades: 0, wins: 0, win_rate: 0 };
+    if (!bySymbol[r.symbol]) bySymbol[r.symbol] = { trades: 0, wins: 0, losses: 0, pending: 0, win_rate: 0 };
     bySymbol[r.symbol].trades++;
     if (r.status === 'won' || r.status === 'partial') bySymbol[r.symbol].wins++;
+    else if (r.status === 'lost') bySymbol[r.symbol].losses++;
+    else bySymbol[r.symbol].pending++;
   });
   Object.values(bySymbol).forEach(s => {
-    s.win_rate = s.trades > 0 ? (s.wins / s.trades) * 100 : 0;
+    const completed = s.wins + s.losses;
+    s.win_rate = completed > 0 ? (s.wins / completed) * 100 : 0;
   });
 
   // Group by strategy
@@ -746,6 +749,36 @@ export async function backfillPredictions(userId: string): Promise<{ created: nu
     }
   }
 
+  // Repair existing records with wrong 'neutral' direction
+  const { data: neutralRecords } = await supabase
+    .from('backtest_records')
+    .select('id, job_id')
+    .eq('user_id', userId)
+    .eq('predicted_direction', 'neutral');
+
+  if (neutralRecords && neutralRecords.length > 0) {
+    console.log(`[Backfill] Repairing ${neutralRecords.length} records with neutral direction`);
+    for (const record of neutralRecords) {
+      // Look up the original recommendation from the job
+      const { data: jobData } = await supabase
+        .from('trading_analysis_jobs')
+        .select('final_result')
+        .eq('id', record.job_id)
+        .single();
+
+      if (jobData?.final_result?.recommendation) {
+        const correctDirection = getDirection(jobData.final_result.recommendation);
+        if (correctDirection !== 'neutral') {
+          await supabase
+            .from('backtest_records')
+            .update({ predicted_direction: correctDirection, updated_at: new Date().toISOString() })
+            .eq('id', record.id);
+          console.log(`[Backfill] Fixed direction for record ${record.id}: neutral → ${correctDirection}`);
+        }
+      }
+    }
+  }
+
   console.log(`[Backfill] Done: created=${created}, skipped=${skipped}, errors=${errors}`);
   return { created, skipped, errors };
 }
@@ -775,8 +808,9 @@ function calculateExpiryDate(timeframe: string): string {
 }
 
 function getDirection(recommendation: string): 'bullish' | 'bearish' | 'neutral' {
-  if (['strong_buy', 'buy'].includes(recommendation)) return 'bullish';
-  if (['strong_sell', 'sell'].includes(recommendation)) return 'bearish';
+  const rec = (recommendation || '').toLowerCase().trim();
+  if (['strong_buy', 'buy', 'strong buy', 'moderate_buy'].includes(rec)) return 'bullish';
+  if (['strong_sell', 'sell', 'strong sell', 'moderate_sell'].includes(rec)) return 'bearish';
   return 'neutral';
 }
 
