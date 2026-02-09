@@ -134,24 +134,47 @@ export async function savePrediction(
     return null;
   }
 
-  // Last resort: if we have a target but no entry for stocks, fetch live price
-  if ((!entryPrice || entryPrice === 0) && recommendation.analysis_type === 'stock' && targetPrice > 0) {
+  // Last resort: fetch live price for stocks/forex when entry price is missing
+  if (!entryPrice || entryPrice === 0) {
     try {
-      console.log(`[Backtest] No entry price for ${recommendation.symbol} - fetching live quote`);
-      const quote = await getStockQuote(recommendation.symbol);
-      if (quote?.price) {
-        entryPrice = quote.price;
-        console.log(`[Backtest] Got live price for entry: $${entryPrice}`);
+      if (recommendation.analysis_type === 'stock') {
+        console.log(`[Backtest] No entry price for ${recommendation.symbol} - fetching live stock quote`);
+        const quote = await getStockQuote(recommendation.symbol);
+        if (quote?.price) {
+          entryPrice = quote.price;
+          console.log(`[Backtest] Got live stock price for entry: $${entryPrice}`);
+        }
+      } else if (recommendation.analysis_type === 'forex') {
+        console.log(`[Backtest] No entry price for ${recommendation.symbol} - fetching live forex quote`);
+        const quote = await getForexQuote(recommendation.symbol);
+        if (quote && 'price' in quote) {
+          entryPrice = Number(quote.price);
+          console.log(`[Backtest] Got live forex price for entry: ${entryPrice}`);
+        }
       }
-    } catch {
-      console.warn(`[Backtest] Failed to fetch live price for ${recommendation.symbol}`);
+    } catch (e) {
+      console.warn(`[Backtest] Failed to fetch live price for ${recommendation.symbol}:`, e);
+    }
+  }
+
+  // Also try to use price_target from recommendation if it exists as a string like "$300"
+  if ((!targetPrice || targetPrice === 0) && recommendation.price_target) {
+    if (typeof recommendation.price_target === 'string') {
+      const ptMatch = String(recommendation.price_target).match(/\$?([\d.]+)/);
+      if (ptMatch) targetPrice = parseFloat(ptMatch[1]);
+    } else if (typeof recommendation.price_target === 'number') {
+      targetPrice = recommendation.price_target;
     }
   }
 
   // For stock/options, we can save even with derived values
-  // Only skip if we truly have no prices at all
+  // Only skip if we truly have no prices at all AND couldn't fetch live price
   if (entryPrice === 0 && stopLoss === 0 && targetPrice === 0) {
-    console.warn('[Backtest] Skipping save - all prices are 0:', { entryPrice, stopLoss, targetPrice });
+    console.warn('[Backtest] Skipping save - all prices are 0 and live quote failed:', {
+      symbol: recommendation.symbol,
+      type: recommendation.analysis_type,
+      recommendation: recommendation.recommendation,
+    });
     return null;
   }
 
