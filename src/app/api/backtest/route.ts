@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Always backfill missing predictions (fast - skips existing records)
-    let backfillResult = { created: 0, skipped: 0, errors: 0 };
+    let backfillResult = { created: 0, skipped: 0, errors: 0, details: [] as string[] };
     let backfillError: string | null = null;
     try {
       backfillResult = await backfillPredictions(user.id);

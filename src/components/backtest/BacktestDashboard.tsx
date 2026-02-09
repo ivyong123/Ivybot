@@ -68,8 +68,16 @@ function FilterIcon(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+interface DebugInfo {
+  backfill?: { created: number; skipped: number; errors: number; details?: string[] };
+  backfillError?: string | null;
+  userId?: string;
+}
+
 export function BacktestDashboard() {
   const [summary, setSummary] = useState<BacktestSummary | null>(null);
+  const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -103,6 +111,7 @@ export function BacktestDashboard() {
       if (response.ok) {
         const data = await response.json();
         setSummary(data);
+        if (data._debug) setDebugInfo(data._debug);
         if (refresh) toast.success('Predictions updated');
       }
     } catch (error) {
@@ -305,6 +314,34 @@ export function BacktestDashboard() {
             <Button variant="ghost" size="sm" onClick={clearFilters}>
               Clear Filters
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Debug Info - Show when 0 trades to help diagnose */}
+      {stats.total_trades === 0 && debugInfo && (
+        <div className="glass-card p-4 border border-yellow-500/30 bg-yellow-500/5">
+          <h3 className="font-semibold text-yellow-500 mb-2 text-sm">Diagnostics (0 trades found)</h3>
+          <div className="text-xs text-muted-foreground space-y-1 font-mono">
+            <p>User: {debugInfo.userId}</p>
+            {debugInfo.backfillError && (
+              <p className="text-red-400">Backfill Error: {debugInfo.backfillError}</p>
+            )}
+            {debugInfo.backfill && (
+              <>
+                <p>Created: {debugInfo.backfill.created} | Skipped: {debugInfo.backfill.skipped} | Errors: {debugInfo.backfill.errors}</p>
+                {debugInfo.backfill.details && debugInfo.backfill.details.length > 0 && (
+                  <div className="mt-2 space-y-0.5 max-h-40 overflow-y-auto">
+                    {debugInfo.backfill.details.map((d, i) => (
+                      <p key={i} className="text-xs">{d}</p>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+            {!debugInfo.backfill && !debugInfo.backfillError && (
+              <p>No backfill data returned - check if the latest code is deployed</p>
+            )}
           </div>
         </div>
       )}

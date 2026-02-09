@@ -709,11 +709,12 @@ export async function getBacktestSymbols(userId: string): Promise<string[]> {
 }
 
 // Backfill missing backtest records from completed analysis jobs
-export async function backfillPredictions(userId: string): Promise<{ created: number; skipped: number; errors: number }> {
+export async function backfillPredictions(userId: string): Promise<{ created: number; skipped: number; errors: number; details: string[] }> {
   const supabase = createAdminClient();
   let created = 0;
   let skipped = 0;
   let errors = 0;
+  const details: string[] = [];
 
   // Get all completed analysis jobs for this user
   const { data: jobs, error: jobsError } = await supabase
@@ -725,21 +726,30 @@ export async function backfillPredictions(userId: string): Promise<{ created: nu
     .order('created_at', { ascending: false });
 
   if (jobsError || !jobs) {
-    console.error('[Backfill] Failed to fetch jobs:', jobsError);
-    return { created: 0, skipped: 0, errors: 1 };
+    const msg = `Failed to fetch jobs: ${jobsError?.message || 'null result'}`;
+    console.error('[Backfill]', msg);
+    details.push(msg);
+    return { created: 0, skipped: 0, errors: 1, details };
   }
 
+  details.push(`Found ${jobs.length} completed jobs`);
   console.log(`[Backfill] Found ${jobs.length} completed jobs for user ${userId.slice(0, 8)}...`);
+
   if (jobs.length > 0) {
-    console.log(`[Backfill] First job sample:`, {
-      id: jobs[0].id,
-      symbol: jobs[0].symbol,
-      analysis_type: jobs[0].analysis_type,
-      has_final_result: !!jobs[0].final_result,
-      final_result_type: typeof jobs[0].final_result,
-      recommendation: jobs[0].final_result?.recommendation,
-      has_symbol: !!jobs[0].final_result?.symbol,
-    });
+    // Log first 3 jobs for debugging
+    for (let i = 0; i < Math.min(3, jobs.length); i++) {
+      const j = jobs[i];
+      let fr = j.final_result;
+
+      // Handle JSON string final_result
+      if (typeof fr === 'string') {
+        try { fr = JSON.parse(fr); } catch { /* not valid JSON string */ }
+      }
+
+      const info = `Job ${j.id.slice(0, 8)}: symbol=${j.symbol}, fr_type=${typeof j.final_result}, rec=${fr?.recommendation || 'none'}, fr_symbol=${fr?.symbol || 'none'}`;
+      console.log(`[Backfill] ${info}`);
+      details.push(info);
+    }
   }
 
   // Get existing backtest records to avoid duplicates
@@ -749,6 +759,7 @@ export async function backfillPredictions(userId: string): Promise<{ created: nu
     .eq('user_id', userId);
 
   const existingJobIds = new Set((existingRecords || []).map(r => r.job_id));
+  details.push(`${existingJobIds.size} existing backtest records`);
   console.log(`[Backfill] ${existingJobIds.size} existing backtest records found`);
 
   for (const job of jobs) {
@@ -758,14 +769,40 @@ export async function backfillPredictions(userId: string): Promise<{ created: nu
       continue;
     }
 
-    const recommendation = job.final_result;
+    // Parse final_result - handle case where it's stored as a JSON string
+    let recommendation = job.final_result;
+    if (typeof recommendation === 'string') {
+      try {
+        recommendation = JSON.parse(recommendation);
+        console.log(`[Backfill] Parsed string final_result for job ${job.id.slice(0, 8)}`);
+      } catch {
+        details.push(`Job ${job.id.slice(0, 8)}: final_result is unparseable string`);
+        skipped++;
+        continue;
+      }
+    }
+
     if (!recommendation || !recommendation.symbol) {
-      skipped++;
-      continue;
+      // If no symbol in final_result, try using the job's symbol
+      if (recommendation && job.symbol) {
+        recommendation.symbol = job.symbol;
+        recommendation.analysis_type = recommendation.analysis_type || job.analysis_type;
+        console.log(`[Backfill] Patched missing symbol from job: ${job.symbol}`);
+      } else {
+        details.push(`Job ${job.id.slice(0, 8)}: no recommendation or symbol (rec=${recommendation?.recommendation})`);
+        skipped++;
+        continue;
+      }
+    }
+
+    // Ensure analysis_type is set
+    if (!recommendation.analysis_type) {
+      recommendation.analysis_type = job.analysis_type;
     }
 
     // Skip wait/hold
     if (recommendation.recommendation === 'wait' || recommendation.recommendation === 'hold') {
+      details.push(`Job ${job.id.slice(0, 8)} (${recommendation.symbol}): skipped - ${recommendation.recommendation}`);
       skipped++;
       continue;
     }
@@ -774,11 +811,15 @@ export async function backfillPredictions(userId: string): Promise<{ created: nu
       const saved = await savePrediction(job.id, userId, recommendation);
       if (saved) {
         created++;
+        details.push(`Job ${job.id.slice(0, 8)} (${recommendation.symbol}): CREATED`);
         console.log(`[Backfill] Created record for ${recommendation.symbol} (${job.id})`);
       } else {
+        details.push(`Job ${job.id.slice(0, 8)} (${recommendation.symbol}): savePrediction returned null`);
         skipped++;
       }
     } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      details.push(`Job ${job.id.slice(0, 8)} (${recommendation.symbol}): ERROR - ${errMsg}`);
       console.error(`[Backfill] Error saving ${recommendation.symbol}:`, err);
       errors++;
     }
@@ -815,7 +856,7 @@ export async function backfillPredictions(userId: string): Promise<{ created: nu
   }
 
   console.log(`[Backfill] Done: created=${created}, skipped=${skipped}, errors=${errors}`);
-  return { created, skipped, errors };
+  return { created, skipped, errors, details };
 }
 
 // Helper functions
