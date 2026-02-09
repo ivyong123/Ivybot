@@ -47,16 +47,24 @@ export async function savePrediction(
   if (recommendation.stock_result?.execution) {
     const exec = recommendation.stock_result.execution;
     if (!entryPrice || entryPrice === 0) {
-      entryPrice = exec.entryPrice || 0;
+      entryPrice = typeof exec.entryPrice === 'number' ? exec.entryPrice : parseFloat(String(exec.entryPrice)) || 0;
     }
-    // stopLoss and profitTarget are strings, extract numbers
-    if (!stopLoss || stopLoss === 0) {
-      const slMatch = exec.stopLoss?.match(/\$?([\d.]+)/);
-      if (slMatch) stopLoss = parseFloat(slMatch[1]);
+    // stopLoss and profitTarget can be strings ("$185.50") or numbers (185.50) - handle both
+    if ((!stopLoss || stopLoss === 0) && exec.stopLoss != null) {
+      if (typeof exec.stopLoss === 'number') {
+        stopLoss = exec.stopLoss;
+      } else {
+        const slMatch = String(exec.stopLoss).match(/\$?([\d.]+)/);
+        if (slMatch) stopLoss = parseFloat(slMatch[1]);
+      }
     }
-    if (!targetPrice || targetPrice === 0) {
-      const ptMatch = exec.profitTarget?.match(/\$?([\d.]+)/);
-      if (ptMatch) targetPrice = parseFloat(ptMatch[1]);
+    if ((!targetPrice || targetPrice === 0) && exec.profitTarget != null) {
+      if (typeof exec.profitTarget === 'number') {
+        targetPrice = exec.profitTarget;
+      } else {
+        const ptMatch = String(exec.profitTarget).match(/\$?([\d.]+)/);
+        if (ptMatch) targetPrice = parseFloat(ptMatch[1]);
+      }
     }
     // Fallback to breakeven
     if (!targetPrice || targetPrice === 0) {
@@ -230,6 +238,12 @@ async function checkAndUpdatePrediction(record: BacktestRecord): Promise<boolean
     const targetPrice = record.target_price;
     const stopLoss = record.stop_loss;
 
+    // Guard against invalid prices
+    if (!entryPrice || entryPrice === 0 || !targetPrice || !stopLoss) {
+      console.warn(`[Backtest] Invalid prices for ${record.symbol}: entry=${entryPrice}, target=${targetPrice}, stop=${stopLoss}`);
+      return false;
+    }
+
     const isBullish = record.predicted_direction === 'bullish';
     const now = new Date();
     const expiryDate = new Date(record.expiry_date);
@@ -249,6 +263,11 @@ async function checkAndUpdatePrediction(record: BacktestRecord): Promise<boolean
       hitTarget = currentPrice <= targetPrice;
       hitStop = currentPrice >= stopLoss;
       pnlPercent = ((entryPrice - currentPrice) / entryPrice) * 100;
+    }
+
+    // Guard against NaN
+    if (isNaN(pnlPercent) || !isFinite(pnlPercent)) {
+      pnlPercent = 0;
     }
 
     // For forex, check individual TPs

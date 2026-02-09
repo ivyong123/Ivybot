@@ -435,9 +435,9 @@ function validateTradeQuality(
     return { isValid: true, reason: 'Wait/hold recommendation' };
   }
 
-  // Check confidence threshold
-  if (confidence < 60) {
-    return { isValid: false, reason: `Low confidence (${confidence}%) - should be wait` };
+  // Check confidence threshold - only reject very low confidence
+  if (confidence < 40) {
+    return { isValid: false, reason: `Very low confidence (${confidence}%) - should be wait` };
   }
 
   // For stock/options, validate R:R
@@ -449,10 +449,12 @@ function validateTradeQuality(
     console.log(`[Agent] R:R Validation - Entry: ${entryPrice}, SL: ${stopLoss}, Target: ${priceTarget}`);
     console.log(`[Agent] R:R Validation - Risk: ${risk.toFixed(2)}, Reward: ${reward.toFixed(2)}, Ratio: ${riskRewardRatio.toFixed(2)}`);
 
-    if (riskRewardRatio < 2) {
+    // Only reject if R:R is extremely poor (below 1:1)
+    // Trades with R:R between 1:1 and 2:1 are still valid but noted
+    if (riskRewardRatio < 1) {
       return {
         isValid: false,
-        reason: `R:R ratio ${riskRewardRatio.toFixed(1)}:1 is below minimum 2:1 - should be wait`
+        reason: `R:R ratio ${riskRewardRatio.toFixed(1)}:1 is below minimum 1:1 - risk exceeds reward`
       };
     }
   }
@@ -501,26 +503,6 @@ function parseRecommendation(
       }
     }
 
-    // Validate trade quality for stocks
-    const validation = validateTradeQuality(
-      parsed.recommendation || 'hold',
-      parsed.entry_price,
-      parsed.stop_loss,
-      parsed.price_target,
-      parsed.confidence || 50,
-      analysisType
-    );
-
-    // If validation fails, convert to "wait" recommendation
-    let finalRecommendation = parsed.recommendation || 'hold';
-    let finalReasoning = parsed.reasoning || 'Analysis complete';
-
-    if (!validation.isValid) {
-      console.log(`[Agent] Trade validation failed: ${validation.reason}`);
-      finalRecommendation = 'wait';
-      finalReasoning = `${validation.reason}. Original analysis: ${parsed.reasoning || 'See analysis above'}`;
-    }
-
     // Extract current price from various possible sources
     let currentPrice = parsed.current_price || parsed.currentPrice || null;
     // Fallback: try to get from forex_setup or stock_result
@@ -559,16 +541,24 @@ function parseRecommendation(
     if (parsed.stock_result?.execution) {
       const exec = parsed.stock_result.execution;
       if (!entryPrice && exec.entryPrice) {
-        entryPrice = exec.entryPrice;
+        entryPrice = typeof exec.entryPrice === 'number' ? exec.entryPrice : parseFloat(String(exec.entryPrice));
       }
-      // stopLoss and profitTarget are strings in stock_result, extract numbers
-      if (!stopLoss && exec.stopLoss) {
-        const slMatch = exec.stopLoss.match(/\$?([\d.]+)/);
-        if (slMatch) stopLoss = parseFloat(slMatch[1]);
+      // stopLoss and profitTarget can be strings ("$185.50") or numbers (185.50) - handle both
+      if (!stopLoss && exec.stopLoss != null) {
+        if (typeof exec.stopLoss === 'number') {
+          stopLoss = exec.stopLoss;
+        } else {
+          const slMatch = String(exec.stopLoss).match(/\$?([\d.]+)/);
+          if (slMatch) stopLoss = parseFloat(slMatch[1]);
+        }
       }
-      if (!priceTarget && exec.profitTarget) {
-        const ptMatch = exec.profitTarget.match(/\$?([\d.]+)/);
-        if (ptMatch) priceTarget = parseFloat(ptMatch[1]);
+      if (!priceTarget && exec.profitTarget != null) {
+        if (typeof exec.profitTarget === 'number') {
+          priceTarget = exec.profitTarget;
+        } else {
+          const ptMatch = String(exec.profitTarget).match(/\$?([\d.]+)/);
+          if (ptMatch) priceTarget = parseFloat(ptMatch[1]);
+        }
       }
       // Also try to get from riskReward.breakeven as fallback for target
       if (!priceTarget && parsed.stock_result.riskReward?.breakeven) {
@@ -582,6 +572,28 @@ function parseRecommendation(
       if (currentPrice) {
         entryPrice = currentPrice;
       }
+    }
+
+    console.log('[Agent] Extracted prices:', { entryPrice, stopLoss, priceTarget, currentPrice, source: parsed.stock_result?.execution ? 'stock_result' : forexSetup?.trade ? 'forex_setup' : 'top-level' });
+
+    // Validate trade quality AFTER extracting all prices
+    const validation = validateTradeQuality(
+      parsed.recommendation || 'hold',
+      entryPrice,
+      stopLoss,
+      priceTarget,
+      parsed.confidence || 50,
+      analysisType
+    );
+
+    // If validation fails, convert to "wait" recommendation
+    let finalRecommendation = parsed.recommendation || 'hold';
+    let finalReasoning = parsed.reasoning || 'Analysis complete';
+
+    if (!validation.isValid) {
+      console.log(`[Agent] Trade validation failed: ${validation.reason}`);
+      finalRecommendation = 'wait';
+      finalReasoning = `${validation.reason}. Original analysis: ${parsed.reasoning || 'See analysis above'}`;
     }
 
     // Validate and return
