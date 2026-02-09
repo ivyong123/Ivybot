@@ -462,6 +462,72 @@ function validateTradeQuality(
   return { isValid: true, reason: 'Trade meets quality requirements' };
 }
 
+// Robustly extract JSON from AI response content
+function extractJSON(content: string): Record<string, unknown> | null {
+  // 1. Try markdown code fences first: ```json ... ``` or ``` ... ```
+  const codeBlockMatch = content.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
+  if (codeBlockMatch) {
+    try {
+      return JSON.parse(codeBlockMatch[1].trim());
+    } catch {
+      // Code block content wasn't valid JSON, continue
+    }
+  }
+
+  // 2. Find the outermost balanced JSON object
+  const firstBrace = content.indexOf('{');
+  if (firstBrace !== -1) {
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+
+    for (let i = firstBrace; i < content.length; i++) {
+      const ch = content[i];
+
+      if (escape) { escape = false; continue; }
+      if (ch === '\\' && inString) { escape = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+
+      if (ch === '{') depth++;
+      else if (ch === '}') {
+        depth--;
+        if (depth === 0) {
+          const jsonStr = content.slice(firstBrace, i + 1);
+          try {
+            return JSON.parse(jsonStr);
+          } catch {
+            // Try cleaning trailing commas and single-line comments
+            const cleaned = jsonStr
+              .replace(/,\s*([}\]])/g, '$1')
+              .replace(/\/\/[^\n]*/g, '');
+            try {
+              return JSON.parse(cleaned);
+            } catch {
+              break; // This balanced block failed, try greedy fallback
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 3. Greedy fallback
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      return JSON.parse(jsonMatch[0]);
+    } catch {
+      const cleaned = jsonMatch[0]
+        .replace(/,\s*([}\]])/g, '$1')
+        .replace(/\/\/[^\n]*/g, '');
+      try { return JSON.parse(cleaned); } catch { /* fall through */ }
+    }
+  }
+
+  return null;
+}
+
 // Parse Claude's JSON recommendation
 function parseRecommendation(
   content: string,
@@ -469,13 +535,13 @@ function parseRecommendation(
   analysisType: AnalysisType
 ): TradeRecommendation {
   try {
-    // Extract JSON from the response
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
+    // Extract JSON from the response using robust extractor
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed: any = extractJSON(content);
+    if (!parsed) {
       throw new Error('No JSON found in response');
     }
 
-    const parsed = JSON.parse(jsonMatch[0]);
     console.log('[Agent] Parsed recommendation keys:', Object.keys(parsed));
 
     // Fix any past dates in options strategy
