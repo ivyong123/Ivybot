@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { getBacktestSummary, checkPendingPredictions, getBacktestSymbols, BacktestFilters } from '@/lib/backtest';
+import { getBacktestSummary, checkPendingPredictions, getBacktestSymbols, backfillPredictions, BacktestFilters } from '@/lib/backtest';
 
 // GET - Get backtest statistics with optional filters
 export async function GET(request: NextRequest) {
@@ -25,6 +25,12 @@ export async function GET(request: NextRequest) {
     const refresh = searchParams.get('refresh') === 'true';
 
     if (refresh) {
+      // Backfill any missing predictions from completed analyses
+      const backfill = await backfillPredictions(user.id);
+      if (backfill.created > 0) {
+        console.log(`[Backtest] Backfilled ${backfill.created} missing predictions`);
+      }
+
       // Check and update pending predictions
       const updated = await checkPendingPredictions();
       console.log(`[Backtest] Updated ${updated} predictions`);
@@ -34,6 +40,16 @@ export async function GET(request: NextRequest) {
     if (searchParams.get('symbols') === 'true') {
       const symbols = await getBacktestSymbols(user.id);
       return NextResponse.json({ symbols });
+    }
+
+    // Always backfill missing predictions (fast - skips existing records)
+    try {
+      const backfill = await backfillPredictions(user.id);
+      if (backfill.created > 0) {
+        console.log(`[Backtest] Auto-backfilled ${backfill.created} missing predictions for user ${user.id.slice(0, 8)}...`);
+      }
+    } catch (backfillErr) {
+      console.error('[Backtest] Backfill error (non-fatal):', backfillErr);
     }
 
     // Parse filters from query params

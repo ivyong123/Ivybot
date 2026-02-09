@@ -681,6 +681,75 @@ export async function getBacktestSymbols(userId: string): Promise<string[]> {
   return symbols;
 }
 
+// Backfill missing backtest records from completed analysis jobs
+export async function backfillPredictions(userId: string): Promise<{ created: number; skipped: number; errors: number }> {
+  const supabase = createAdminClient();
+  let created = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  // Get all completed analysis jobs for this user
+  const { data: jobs, error: jobsError } = await supabase
+    .from('trading_analysis_jobs')
+    .select('id, symbol, analysis_type, final_result, created_at')
+    .eq('user_id', userId)
+    .eq('status', 'completed')
+    .not('final_result', 'is', null)
+    .order('created_at', { ascending: false });
+
+  if (jobsError || !jobs) {
+    console.error('[Backfill] Failed to fetch jobs:', jobsError);
+    return { created: 0, skipped: 0, errors: 1 };
+  }
+
+  console.log(`[Backfill] Found ${jobs.length} completed jobs for user ${userId.slice(0, 8)}...`);
+
+  // Get existing backtest records to avoid duplicates
+  const { data: existingRecords } = await supabase
+    .from('backtest_records')
+    .select('job_id')
+    .eq('user_id', userId);
+
+  const existingJobIds = new Set((existingRecords || []).map(r => r.job_id));
+  console.log(`[Backfill] ${existingJobIds.size} existing backtest records found`);
+
+  for (const job of jobs) {
+    // Skip if already has a backtest record
+    if (existingJobIds.has(job.id)) {
+      skipped++;
+      continue;
+    }
+
+    const recommendation = job.final_result;
+    if (!recommendation || !recommendation.symbol) {
+      skipped++;
+      continue;
+    }
+
+    // Skip wait/hold
+    if (recommendation.recommendation === 'wait' || recommendation.recommendation === 'hold') {
+      skipped++;
+      continue;
+    }
+
+    try {
+      const saved = await savePrediction(job.id, userId, recommendation);
+      if (saved) {
+        created++;
+        console.log(`[Backfill] Created record for ${recommendation.symbol} (${job.id})`);
+      } else {
+        skipped++;
+      }
+    } catch (err) {
+      console.error(`[Backfill] Error saving ${recommendation.symbol}:`, err);
+      errors++;
+    }
+  }
+
+  console.log(`[Backfill] Done: created=${created}, skipped=${skipped}, errors=${errors}`);
+  return { created, skipped, errors };
+}
+
 // Helper functions
 function calculateExpiryDate(timeframe: string): string {
   const now = new Date();
