@@ -241,15 +241,15 @@ Examples of how to apply user context:
 
         const finalAnalysis = reflection.refined_analysis || initialAnalysis;
 
-        // Ask for structured output
+        // Ask for structured output - use higher token limit for forex JSON
         state.messages.push({
           role: 'user',
-          content: `${getFinalRecommendationPrompt()}\n\nBased on your analysis:\n${finalAnalysis}`,
+          content: `${getFinalRecommendationPrompt()}\n\nIMPORTANT: Respond with ONLY the JSON object. No markdown, no explanation, no code fences. Start your response with { and end with }.\n\nBased on your analysis:\n${finalAnalysis}`,
         });
 
         const finalResponse = await chatCompletion(state.messages, {
           taskType: 'recommendation',
-          maxTokens: 4096,
+          maxTokens: 8192,
         });
 
         const finalContent = finalResponse.choices[0]?.message?.content;
@@ -314,12 +314,12 @@ Examples of how to apply user context:
     // Add a strong prompt to force final output
     state.messages.push({
       role: 'user',
-      content: `CRITICAL: You MUST provide your final analysis NOW. No more tool calls allowed. Based on all the data you've gathered, provide your complete trading recommendation in JSON format. If you don't have enough data, recommend "wait".`,
+      content: `CRITICAL: You MUST provide your final analysis NOW. No more tool calls allowed. Based on all the data you've gathered, provide your complete trading recommendation in JSON format. If you don't have enough data, recommend "wait". Respond with ONLY the JSON object, no markdown.`,
     });
 
     const fallbackResponse = await chatCompletion(state.messages, {
       taskType: 'recommendation',
-      maxTokens: 4096,
+      maxTokens: 8192,
     });
 
     const fallbackContent = fallbackResponse.choices[0]?.message?.content;
@@ -333,12 +333,12 @@ Examples of how to apply user context:
       });
       state.messages.push({
         role: 'user',
-        content: getFinalRecommendationPrompt(),
+        content: `${getFinalRecommendationPrompt()}\n\nIMPORTANT: Respond with ONLY the JSON object. No markdown, no explanation, no code fences. Start your response with { and end with }.`,
       });
 
       const structuredResponse = await chatCompletion(state.messages, {
         taskType: 'recommendation',
-        maxTokens: 4096,
+        maxTokens: 8192,
       });
 
       const structuredContent = structuredResponse.choices[0]?.message?.content;
@@ -686,20 +686,42 @@ function parseRecommendation(
     console.error('Failed to parse recommendation:', error);
     console.error('Content preview:', content.slice(0, 500));
 
-    // Return a basic recommendation if parsing fails
+    // Try to extract useful data from text when JSON parsing fails
+    const priceMatch = content.match(/(?:current|market)\s*(?:price|rate)[:\s]*\$?([\d.]+)/i);
+    const currentPrice = priceMatch ? parseFloat(priceMatch[1]) : null;
+
+    // Try to detect recommendation from text
+    let textRec: 'strong_buy' | 'buy' | 'hold' | 'sell' | 'strong_sell' | 'wait' = 'hold';
+    const lowerContent = content.toLowerCase();
+    if (lowerContent.includes('strong buy') || lowerContent.includes('strong_buy')) textRec = 'strong_buy';
+    else if (lowerContent.includes('strong sell') || lowerContent.includes('strong_sell')) textRec = 'strong_sell';
+    else if (/\bbuy\b/.test(lowerContent) && !/\bdon'?t buy\b/.test(lowerContent)) textRec = 'buy';
+    else if (/\bsell\b/.test(lowerContent) && !/\bdon'?t sell\b/.test(lowerContent)) textRec = 'sell';
+    else if (/\bwait\b/.test(lowerContent) || /\bno trade\b/.test(lowerContent)) textRec = 'wait';
+
+    // Try to extract timeframe
+    const tfMatch = content.match(/(?:timeframe|time\s*frame)[:\s]*([\w\s\-/]+?)(?:\.|,|\n|$)/i);
+    const timeframe = tfMatch ? tfMatch[1].trim().slice(0, 30) : 'Short-term';
+
+    // Try to extract confidence
+    const confMatch = content.match(/(?:confidence)[:\s]*(\d+)%?/i);
+    const confidence = confMatch ? Math.min(parseInt(confMatch[1]), 100) : 40;
+
+    console.log(`[Agent] Text fallback - rec: ${textRec}, price: ${currentPrice}, conf: ${confidence}, tf: ${timeframe}`);
+
     return {
       symbol: symbol.toUpperCase(),
       analysis_type: analysisType,
-      recommendation: 'hold',
-      confidence: 30,
-      current_price: null,
+      recommendation: textRec,
+      confidence,
+      current_price: currentPrice,
       price_target: null,
       stop_loss: null,
       entry_price: null,
-      timeframe: 'Unknown',
-      reasoning: content.slice(0, 500),
+      timeframe,
+      reasoning: content.slice(0, 2000),
       key_factors: [],
-      risks: ['Analysis parsing failed - review manually'],
+      risks: ['Analysis was provided as text - JSON parsing failed. Key levels may be missing.'],
       data_sources: [],
       generated_at: new Date().toISOString(),
     };
