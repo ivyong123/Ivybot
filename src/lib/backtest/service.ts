@@ -77,6 +77,16 @@ export async function savePrediction(
     entryPrice = recommendation.current_price;
   }
 
+  // Additional fallback: try stock_result.currentPrice
+  if ((!entryPrice || entryPrice === 0) && recommendation.stock_result?.currentPrice) {
+    entryPrice = recommendation.stock_result.currentPrice;
+  }
+
+  // Additional fallback: try to get current price from options strategy breakeven
+  if ((!entryPrice || entryPrice === 0) && recommendation.options_strategy?.breakeven?.length) {
+    entryPrice = recommendation.options_strategy.breakeven[0];
+  }
+
   // For options strategies, derive stop/target from the strategy if not set
   if (recommendation.options_strategy && recommendation.current_price) {
     const currentPrice = recommendation.current_price;
@@ -122,6 +132,20 @@ export async function savePrediction(
   if (recommendation.recommendation === 'wait' || recommendation.recommendation === 'hold') {
     console.log('[Backtest] Skipping save - recommendation is wait/hold');
     return null;
+  }
+
+  // Last resort: if we have a target but no entry for stocks, fetch live price
+  if ((!entryPrice || entryPrice === 0) && recommendation.analysis_type === 'stock' && targetPrice > 0) {
+    try {
+      console.log(`[Backtest] No entry price for ${recommendation.symbol} - fetching live quote`);
+      const quote = await getStockQuote(recommendation.symbol);
+      if (quote?.price) {
+        entryPrice = quote.price;
+        console.log(`[Backtest] Got live price for entry: $${entryPrice}`);
+      }
+    } catch {
+      console.warn(`[Backtest] Failed to fetch live price for ${recommendation.symbol}`);
+    }
   }
 
   // For stock/options, we can save even with derived values
