@@ -198,7 +198,7 @@ export function BacktestDashboard() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold gradient-text">Backtest Performance</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold gradient-text">Backtest Performance</h1>
           <p className="text-muted-foreground">Track the accuracy of AI predictions</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -310,14 +310,14 @@ export function BacktestDashboard() {
       )}
 
       {/* Main Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {/* Win Rate */}
         <div className="glass-card p-6">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-muted-foreground">Win Rate</span>
             <TargetIcon className="h-5 w-5 text-primary" />
           </div>
-          <p className={`text-3xl font-bold ${stats.win_rate >= 50 ? 'text-emerald-500' : 'text-red-500'}`}>
+          <p className={`text-2xl sm:text-3xl font-bold ${stats.win_rate >= 50 ? 'text-emerald-500' : 'text-red-500'}`}>
             {stats.win_rate.toFixed(1)}%
           </p>
           <p className="text-xs text-muted-foreground mt-1">
@@ -331,7 +331,7 @@ export function BacktestDashboard() {
             <span className="text-sm text-muted-foreground">Profit Factor</span>
             <TrendingUpIcon className="h-5 w-5 text-emerald-500" />
           </div>
-          <p className={`text-3xl font-bold ${stats.profit_factor >= 1 ? 'text-emerald-500' : 'text-red-500'}`}>
+          <p className={`text-2xl sm:text-3xl font-bold ${stats.profit_factor >= 1 ? 'text-emerald-500' : 'text-red-500'}`}>
             {stats.profit_factor.toFixed(2)}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
@@ -357,7 +357,7 @@ export function BacktestDashboard() {
             <span className="text-sm text-muted-foreground">Last 10 Trades</span>
             <span className="text-2xl">🎯</span>
           </div>
-          <p className={`text-3xl font-bold ${stats.last_10_trades_win_rate >= 50 ? 'text-emerald-500' : 'text-red-500'}`}>
+          <p className={`text-2xl sm:text-3xl font-bold ${stats.last_10_trades_win_rate >= 50 ? 'text-emerald-500' : 'text-red-500'}`}>
             {stats.last_10_trades_win_rate.toFixed(0)}%
           </p>
           <p className="text-xs text-muted-foreground mt-1">
@@ -450,7 +450,7 @@ export function BacktestDashboard() {
       {Object.keys(by_symbol).length > 0 && (
         <div className="glass-card p-6">
           <h3 className="font-semibold mb-4">Performance by Symbol</h3>
-          <div className="grid gap-2 md:grid-cols-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
             {Object.entries(by_symbol)
               .sort((a, b) => b[1].win_rate - a[1].win_rate)
               .slice(0, 8)
@@ -504,22 +504,22 @@ function TradeRow({ trade }: { trade: BacktestRecord }) {
   const directionIcon = trade.predicted_direction === 'bullish' ? '📈' : trade.predicted_direction === 'bearish' ? '📉' : '➡️';
 
   return (
-    <div className="flex items-center justify-between p-3 rounded-lg glass-subtle">
-      <div className="flex items-center gap-3">
-        <span className="text-xl">{directionIcon}</span>
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="font-mono font-bold">{trade.symbol}</span>
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-lg glass-subtle">
+      <div className="flex items-center gap-3 min-w-0">
+        <span className="text-xl flex-shrink-0">{directionIcon}</span>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-mono font-bold truncate">{trade.symbol}</span>
             <Badge variant="outline" className="text-xs">
               {trade.analysis_type}
             </Badge>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground truncate">
             Entry: {trade.entry_price.toFixed(trade.analysis_type === 'forex' ? 5 : 2)} → Target: {trade.target_price.toFixed(trade.analysis_type === 'forex' ? 5 : 2)}
           </p>
         </div>
       </div>
-      <div className="text-right">
+      <div className="text-right flex-shrink-0 sm:ml-auto">
         <Badge className={statusColors[trade.status]}>
           {trade.status.toUpperCase()}
         </Badge>

@@ -194,7 +194,7 @@ export function ActionSelector({ selected, onSelect }: ActionSelectorProps) {
           <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
           <span className="text-sm font-medium text-muted-foreground">Quick Data Lookup (No Trading Prediction)</span>
         </div>
-        <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
           {standaloneOptions.map((option) => (
             <OptionCardSmall
               key={option.type}

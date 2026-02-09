@@ -373,3 +373,10 @@
 .dark ::-webkit-scrollbar-thumb:hover {
   background: oklch(0.6 0.02 270 / 50%);
 }
+
+/* Safe area for mobile devices with notches/home indicators */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  body {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

@@ -133,9 +133,9 @@ export function ChatInterface() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-12rem)] glass-card overflow-hidden">
+    <div className="flex flex-col h-[calc(100dvh-8rem)] md:h-[calc(100dvh-12rem)] glass-card overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-border/50">
+      <div className="flex items-center justify-between p-3 sm:p-4 border-b border-border/50">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-xl bg-primary/10">
             <SparklesIcon className="h-5 w-5 text-primary" />
@@ -154,7 +154,7 @@ export function ChatInterface() {
 
       {/* Messages Area */}
       <div className="flex-1 overflow-hidden">
-        <ScrollArea className="h-full p-4">
+        <ScrollArea className="h-full p-3 sm:p-4">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center py-12">
               <div className="p-4 rounded-2xl bg-primary/10 mb-4">
@@ -179,7 +179,7 @@ export function ChatInterface() {
                     <button
                       key={suggestion}
                       onClick={() => setInput(suggestion)}
-                      className="p-3 rounded-xl glass-subtle text-left text-sm
+                      className="p-3 min-h-[44px] rounded-xl glass-subtle text-left text-sm
                         hover:bg-primary/5 hover:text-primary transition-all"
                     >
                       {suggestion}
@@ -308,10 +308,10 @@ export function ChatInterface() {
       </div>
 
       {/* Input Area */}
-      <div className="p-4 border-t border-border/50">
-        <form onSubmit={handleSubmit} className="flex gap-3">
+      <div className="p-3 sm:p-4 border-t border-border/50">
+        <form onSubmit={handleSubmit} className="flex gap-2 sm:gap-3">
           <Input
-            placeholder="Ask about trading, strategies, or market analysis..."
+            placeholder="Ask about trading, strategies..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
             disabled={isLoading}
@@ -321,7 +321,7 @@ export function ChatInterface() {
           <Button
             type="submit"
             disabled={!input.trim() || isLoading}
-            className="px-6 rounded-xl bg-primary hover:bg-primary/90
+            className="px-4 sm:px-6 min-h-[44px] rounded-xl bg-primary hover:bg-primary/90
               glow-primary hover:scale-105 transition-all"
           >
             <SendIcon className="h-5 w-5" />

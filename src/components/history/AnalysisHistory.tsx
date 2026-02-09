@@ -129,9 +129,9 @@ export function AnalysisHistory() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="space-y-1">
-          <h1 className="text-3xl font-bold gradient-text">Analysis History</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold gradient-text">Analysis History</h1>
           <p className="text-muted-foreground">
             View and download your past trading analyses
           </p>
@@ -184,18 +184,18 @@ export function AnalysisHistory() {
                 key={job.id}
                 className="glass-card p-6 hover:glow-primary transition-all"
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                  <div className="flex items-start gap-3 sm:gap-4 min-w-0">
                     {/* Symbol Badge */}
-                    <div className="p-3 rounded-xl bg-primary/10">
-                      <span className="text-lg font-bold text-primary">
+                    <div className="p-2 sm:p-3 rounded-xl bg-primary/10 flex-shrink-0">
+                      <span className="text-base sm:text-lg font-bold text-primary">
                         {job.symbol}
                       </span>
                     </div>
 
                     {/* Details */}
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-3">
+                    <div className="space-y-2 min-w-0">
+                      <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                         <Badge variant="outline" className="capitalize">
                           {job.analysis_type}
                         </Badge>
@@ -226,7 +226,7 @@ export function AnalysisHistory() {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-2 sm:gap-4 text-sm text-muted-foreground flex-wrap">
                         <span className="flex items-center gap-1">
                           <ClockIcon className="h-4 w-4" />
                           {formatDate(job.created_at)}

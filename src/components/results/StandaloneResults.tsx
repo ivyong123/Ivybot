@@ -131,8 +131,8 @@ function FundamentalsDataDisplay({ data }: { data: Record<string, unknown> }) {
           <h3 className="text-sm font-medium text-muted-foreground">Recent Analyst Ratings</h3>
           <div className="space-y-2">
             {recentRatings.map((rating, i) => (
-              <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                <span className="text-sm">{rating.analyst}</span>
+              <div key={i} className="grid grid-cols-2 sm:flex sm:items-center justify-between gap-1 sm:gap-4 p-3 rounded-lg bg-muted/30">
+                <span className="text-sm truncate">{rating.analyst}</span>
                 <span className={`text-sm font-medium ${getConsensusColor(rating.rating)}`}>{rating.rating}</span>
                 <span className="text-sm">${rating.target}</span>
                 <span className="text-xs text-muted-foreground">{rating.date}</span>
@@ -206,7 +206,7 @@ function NewsDataDisplay({ data }: { data: Record<string, unknown> }) {
                 ) : (
                   <p className="text-sm font-medium">{headline.title}</p>
                 )}
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                   <span>{headline.source}</span>
                   <span className={getSentimentColor(headline.sentiment)}>{headline.sentiment}</span>
                   {headline.url && (

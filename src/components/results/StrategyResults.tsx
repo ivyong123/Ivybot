@@ -187,8 +187,8 @@ export function StrategyResults({ recommendation, jobId }: StrategyResultsProps)
   return (
     <div className="space-y-6">
       {/* Main Recommendation Card */}
-      <div className={`glass-card p-8 ${config.glow}`}>
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className={`glass-card p-4 sm:p-8 ${config.glow}`}>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
           {/* Symbol & Type */}
           <div className="space-y-2">
             <div className="flex items-center gap-3">
@@ -196,8 +196,8 @@ export function StrategyResults({ recommendation, jobId }: StrategyResultsProps)
                 <config.Icon className="h-8 w-8" />
               </div>
               <div>
-                <div className="flex items-baseline gap-3">
-                  <h2 className="text-3xl font-bold">{recommendation.symbol}</h2>
+                <div className="flex items-baseline gap-2 sm:gap-3 flex-wrap">
+                  <h2 className="text-2xl sm:text-3xl font-bold">{recommendation.symbol}</h2>
                   {/* Show CURRENT market price (not entry price) */}
                   {recommendation.current_price && (
                     <span className="text-xl font-mono text-muted-foreground">
@@ -239,7 +239,7 @@ export function StrategyResults({ recommendation, jobId }: StrategyResultsProps)
                 </Button>
               )}
               <div
-                className={`px-6 py-3 rounded-2xl ${config.color} text-white font-bold text-xl`}
+                className={`px-4 py-2 sm:px-6 sm:py-3 rounded-2xl ${config.color} text-white font-bold text-base sm:text-xl`}
               >
                 {config.label}
               </div>
@@ -262,27 +262,27 @@ export function StrategyResults({ recommendation, jobId }: StrategyResultsProps)
         <Separator className="my-6 bg-border/50" />
 
         {/* Price Levels */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           {recommendation.entry_price && (
-            <div className="glass-subtle p-4 rounded-xl text-center">
+            <div className="glass-subtle p-3 sm:p-4 rounded-xl text-center">
               <p className="text-sm text-muted-foreground mb-1">Entry Price</p>
-              <p className="text-2xl font-bold font-mono">
+              <p className="text-xl sm:text-2xl font-bold font-mono">
                 {currencyPrefix}{formatPrice(recommendation.entry_price, recommendation.symbol, isForex)}
               </p>
             </div>
           )}
           {recommendation.price_target && (
-            <div className="p-4 rounded-xl text-center bg-emerald-500/10 border border-emerald-500/20">
+            <div className="p-3 sm:p-4 rounded-xl text-center bg-emerald-500/10 border border-emerald-500/20">
               <p className="text-sm text-emerald-500 mb-1">Target Price</p>
-              <p className="text-2xl font-bold font-mono text-emerald-500">
+              <p className="text-xl sm:text-2xl font-bold font-mono text-emerald-500">
                 {currencyPrefix}{formatPrice(recommendation.price_target, recommendation.symbol, isForex)}
               </p>
             </div>
           )}
           {recommendation.stop_loss && (
-            <div className="p-4 rounded-xl text-center bg-red-500/10 border border-red-500/20">
+            <div className="p-3 sm:p-4 rounded-xl text-center bg-red-500/10 border border-red-500/20">
               <p className="text-sm text-red-500 mb-1">Stop Loss</p>
-              <p className="text-2xl font-bold font-mono text-red-500">
+              <p className="text-xl sm:text-2xl font-bold font-mono text-red-500">
                 {currencyPrefix}{formatPrice(recommendation.stop_loss, recommendation.symbol, isForex)}
               </p>
             </div>
@@ -458,11 +458,11 @@ export function StrategyResults({ recommendation, jobId }: StrategyResultsProps)
               <p className="text-sm font-medium text-muted-foreground">Strategy Legs</p>
               {recommendation.options_strategy.legs.map((leg, index) => (
                 <div key={index} className="p-4 rounded-xl glass-subtle space-y-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                     <span className={`capitalize font-medium ${leg.action === 'buy' ? 'text-emerald-400' : 'text-red-400'}`}>
                       {leg.action.toUpperCase()} {leg.quantity}x {leg.option_type.toUpperCase()}
                     </span>
-                    <span className="font-mono font-bold">
+                    <span className="font-mono font-bold text-sm sm:text-base">
                       ${leg.strike} <span className="text-muted-foreground text-sm">exp {leg.expiration}</span>
                     </span>
                   </div>

@@ -151,8 +151,8 @@ export function AnalysisDashboard() {
   if (standaloneResult) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold gradient-text">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <h1 className="text-2xl sm:text-3xl font-bold gradient-text">
             {standaloneResult.symbol} - {standaloneResult.type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
           </h1>
           <button
@@ -172,8 +172,8 @@ export function AnalysisDashboard() {
   if (currentJob?.status === 'completed' && currentJob.final_result) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold gradient-text">Analysis Results</h1>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <h1 className="text-2xl sm:text-3xl font-bold gradient-text">Analysis Results</h1>
           <button
             onClick={handleNewAnalysis}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-primary hover:bg-primary/10 transition-all"
@@ -199,7 +199,7 @@ export function AnalysisDashboard() {
             </span>
             Analyzing {currentJob.symbol}
           </div>
-          <h1 className="text-4xl font-bold gradient-text">
+          <h1 className="text-2xl sm:text-4xl font-bold gradient-text">
             AI Analysis in Progress
           </h1>
           <p className="text-muted-foreground max-w-md mx-auto">
@@ -223,7 +223,7 @@ export function AnalysisDashboard() {
           <SparklesIcon className="h-4 w-4 text-primary" />
           <span>AI-Powered Trading Analysis</span>
         </div>
-        <h1 className="text-5xl md:text-6xl font-bold tracking-tight">
+        <h1 className="text-3xl sm:text-5xl md:text-6xl font-bold tracking-tight">
           <span className="gradient-text">Smart Money</span>
           <br />
           <span className="text-foreground">Insights</span>

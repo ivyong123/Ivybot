@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { MobileNav } from '@/components/layout/mobile-nav';
 import { User } from '@supabase/supabase-js';
 
 interface HeaderProps {
@@ -96,7 +97,8 @@ export function Header({ user }: HeaderProps) {
     <header className="sticky top-0 z-50 w-full glass border-b border-border/50">
       <div className="container flex h-16 items-center justify-between">
         {/* Logo & Nav */}
-        <div className="flex items-center gap-8">
+        <div className="flex items-center gap-3 md:gap-8">
+          <MobileNav />
           <Link href="/" className="flex items-center gap-3 group">
             <div className="relative">
               <div className="absolute inset-0 bg-primary/20 rounded-xl blur-lg group-hover:bg-primary/30 transition-colors" />
@@ -178,7 +180,7 @@ export function Header({ user }: HeaderProps) {
         <div className="flex items-center gap-3">
           <Link
             href="/help"
-            className="hidden sm:flex h-10 w-10 items-center justify-center rounded-xl glass-subtle hover:bg-primary/10 hover:text-primary transition-all"
+            className="hidden md:flex h-11 w-11 items-center justify-center rounded-xl glass-subtle hover:bg-primary/10 hover:text-primary transition-all"
             title="User Guide"
           >
             <HelpCircleIcon className="h-5 w-5" />
@@ -190,7 +192,7 @@ export function Header({ user }: HeaderProps) {
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="relative h-10 w-10 rounded-xl glass-subtle hover:glow-primary transition-all"
+                  className="relative h-11 w-11 rounded-xl glass-subtle hover:glow-primary transition-all"
                 >
                   <Avatar className="h-8 w-8 rounded-lg">
                     <AvatarFallback className="rounded-lg bg-primary/10 text-primary font-semibold">
