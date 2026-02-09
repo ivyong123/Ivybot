@@ -86,7 +86,7 @@ export interface BacktestStats {
 export interface BacktestSummary {
   stats: BacktestStats;
   recent_trades: BacktestRecord[];
-  by_symbol: Record<string, { trades: number; wins: number; win_rate: number }>;
+  by_symbol: Record<string, { trades: number; wins: number; losses: number; pending: number; win_rate: number }>;
   by_strategy: Record<string, { trades: number; wins: number; win_rate: number }>;
   monthly_performance: Array<{
     month: string;
