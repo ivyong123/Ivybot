@@ -189,6 +189,32 @@ async function executeCompletion(
   };
 }
 
+// Retry helper with exponential backoff for rate limiting
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  label: string,
+  maxRetries: number = 3
+): Promise<T> {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: unknown) {
+      const err = error as Error & { status?: number };
+      lastError = err;
+      // Only retry on 429 (rate limit) or 503 (service unavailable)
+      if ((err.status === 429 || err.status === 503) && attempt < maxRetries) {
+        const delay = Math.min(1000 * Math.pow(2, attempt), 8000); // 1s, 2s, 4s, 8s
+        console.log(`[AI] ${label} got ${err.status}, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
+}
+
 // Main chat completion function with fallback support
 export async function chatCompletion(
   messages: ChatMessage[],
@@ -225,11 +251,14 @@ export async function chatCompletion(
       const client = createClient(openRouterConfig);
       console.log(`[AI] Using OpenRouter with ${primaryModel} (temp: ${temperature}, tools: ${tools?.length || 0})`);
 
-      const response = await executeCompletion(client, primaryModel, messages, {
-        tools,
-        temperature,
-        maxTokens,
-      });
+      const response = await withRetry(
+        () => executeCompletion(client, primaryModel, messages, {
+          tools,
+          temperature,
+          maxTokens,
+        }),
+        'OpenRouter'
+      );
 
       console.log(`[AI] Response received - finish_reason: ${response.choices[0]?.finish_reason}, has_content: ${!!response.choices[0]?.message?.content}, has_tool_calls: ${!!response.choices[0]?.message?.tool_calls?.length}`);
 
@@ -258,11 +287,14 @@ export async function chatCompletion(
       const client = createClient(openAIConfig);
       console.log(`[AI] Falling back to OpenAI with ${fallbackModel} (temp: ${temperature}, tools: ${tools?.length || 0})`);
 
-      const response = await executeCompletion(client, fallbackModel, messages, {
-        tools,
-        temperature,
-        maxTokens,
-      });
+      const response = await withRetry(
+        () => executeCompletion(client, fallbackModel, messages, {
+          tools,
+          temperature,
+          maxTokens,
+        }),
+        'OpenAI'
+      );
 
       console.log(`[AI] OpenAI response received - finish_reason: ${response.choices[0]?.finish_reason}`);
       return response;
