@@ -7,7 +7,7 @@ import { ProgressDisplay } from '@/components/analysis/ProgressDisplay';
 import { AgentProgress } from '@/components/analysis/AgentProgress';
 import { StrategyResults } from '@/components/results/StrategyResults';
 import { StandaloneResults } from '@/components/results/StandaloneResults';
-import { AnalysisType, AnalysisJob, isStandaloneAnalysis } from '@/types/analysis';
+import { AnalysisType, AnalysisJob, isStandaloneAnalysis, TradingTimeframe } from '@/types/analysis';
 import { toast } from 'sonner';
 
 function SparklesIcon(props: React.SVGProps<SVGSVGElement>) {
@@ -88,7 +88,7 @@ export function AnalysisDashboard() {
     return () => clearInterval(pollInterval);
   }, [currentJob]);
 
-  const handleSubmit = async (symbol: string, context?: string) => {
+  const handleSubmit = async (symbol: string, context?: string, timeframe?: TradingTimeframe) => {
     setIsLoading(true);
     setCurrentJob(null);
     setStandaloneResult(null);
@@ -101,6 +101,7 @@ export function AnalysisDashboard() {
           symbol,
           analysis_type: analysisType,
           additional_context: context,
+          trading_timeframe: timeframe,
         }),
       });
 

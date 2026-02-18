@@ -11,6 +11,7 @@ const CreateAnalysisSchema = z.object({
   symbol: z.string().min(1).max(10),
   analysis_type: z.enum(['stock', 'forex', 'technical', 'fundamentals', 'earnings', 'news', 'smart_money']),
   additional_context: z.string().optional(),
+  trading_timeframe: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { symbol, analysis_type, additional_context } = validationResult.data;
+    const { symbol, analysis_type, additional_context, trading_timeframe } = validationResult.data;
 
     // Check if this is a standalone (quick lookup) request
     if (isStandaloneAnalysis(analysis_type as AnalysisType)) {
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Start async analysis (don't await - let it run in background)
-    runAnalysisInBackground(job.id, symbol, analysis_type as FullAnalysisType, additional_context);
+    runAnalysisInBackground(job.id, symbol, analysis_type as FullAnalysisType, additional_context, trading_timeframe);
 
     return NextResponse.json({
       job_id: job.id,
@@ -97,7 +98,8 @@ async function runAnalysisInBackground(
   jobId: string,
   symbol: string,
   analysisType: FullAnalysisType,
-  additionalContext?: string
+  additionalContext?: string,
+  tradingTimeframe?: string
 ) {
   try {
     // Update status to running
@@ -112,6 +114,7 @@ async function runAnalysisInBackground(
       symbol,
       analysisType,
       additionalContext,
+      tradingTimeframe,
       // Progress callback
       async (update) => {
         await updateJobStatus(jobId, {

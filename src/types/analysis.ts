@@ -14,6 +14,13 @@ export function isStandaloneAnalysis(type: AnalysisType): type is StandaloneType
   return ['technical', 'fundamentals', 'earnings', 'news', 'smart_money'].includes(type);
 }
 
+// Trading timeframe options
+export const STOCK_TIMEFRAMES = ['1 week', '2 weeks', '3 weeks', '1 month', '2 months', '3 months'] as const;
+export const FOREX_TIMEFRAMES = ['Intraday', '1-3 days', '1 week', '2 weeks', '1 month'] as const;
+export type StockTimeframe = typeof STOCK_TIMEFRAMES[number];
+export type ForexTimeframe = typeof FOREX_TIMEFRAMES[number];
+export type TradingTimeframe = StockTimeframe | ForexTimeframe;
+
 export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 
 export interface AnalysisJob {

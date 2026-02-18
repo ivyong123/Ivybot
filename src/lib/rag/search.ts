@@ -10,10 +10,14 @@ export async function searchDocuments(
 ): Promise<DocumentChunk[]> {
   const supabase = createAdminClient();
 
-  // Generate embedding for the query
-  const queryEmbedding = await generateEmbedding(query);
+  let queryEmbedding: number[];
+  try {
+    queryEmbedding = await generateEmbedding(query);
+  } catch (err) {
+    console.warn('[RAG] Embedding generation failed (OpenAI quota?), returning empty results:', err instanceof Error ? err.message : err);
+    return [];
+  }
 
-  // Call the vector search function
   const { data, error } = await supabase.rpc('match_documents', {
     query_embedding: queryEmbedding,
     match_count: limit,
@@ -22,7 +26,7 @@ export async function searchDocuments(
 
   if (error) {
     console.error('Document search error:', error);
-    throw new Error(`Failed to search documents: ${error.message}`);
+    return [];
   }
 
   return (data || []).map((doc: { id: number; content: string; metadata: Record<string, unknown>; similarity: number }) => ({
@@ -41,10 +45,14 @@ export async function searchForexKB(
 ): Promise<DocumentChunk[]> {
   const supabase = createAdminClient();
 
-  // Generate embedding for the query
-  const queryEmbedding = await generateEmbedding(query);
+  let queryEmbedding: number[];
+  try {
+    queryEmbedding = await generateEmbedding(query);
+  } catch (err) {
+    console.warn('[RAG] Forex embedding generation failed (OpenAI quota?), returning empty results:', err instanceof Error ? err.message : err);
+    return [];
+  }
 
-  // Call the vector search function
   const { data, error } = await supabase.rpc('match_forex_kb', {
     query_embedding: queryEmbedding,
     match_count: limit,
@@ -53,7 +61,7 @@ export async function searchForexKB(
 
   if (error) {
     console.error('Forex KB search error:', error);
-    throw new Error(`Failed to search forex KB: ${error.message}`);
+    return [];
   }
 
   return (data || []).map((doc: { id: number; content: string; metadata: Record<string, unknown>; similarity: number }) => ({

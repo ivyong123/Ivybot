@@ -503,19 +503,32 @@ User context examples and how to adapt:
 - "London session only" → Time entries for London open, EUR/GBP focus
 - "Risk-averse" → Higher R:R requirements, wait for better setups`;
 
-export function getSystemPrompt(analysisType: AnalysisType): string {
+export function getSystemPrompt(analysisType: AnalysisType, tradingTimeframe?: string): string {
+  let prompt: string;
   switch (analysisType) {
     case 'stock':
-      // Stock analysis = Options trading on stocks (AAPL, TSLA, etc.)
-      return STOCK_ANALYSIS_SYSTEM_PROMPT;
+      prompt = STOCK_ANALYSIS_SYSTEM_PROMPT;
+      break;
     case 'forex':
-      return FOREX_ANALYSIS_SYSTEM_PROMPT;
+      prompt = FOREX_ANALYSIS_SYSTEM_PROMPT;
+      break;
     default:
-      return STOCK_ANALYSIS_SYSTEM_PROMPT;
+      prompt = STOCK_ANALYSIS_SYSTEM_PROMPT;
   }
+
+  if (tradingTimeframe) {
+    prompt += `\n\n## USER-SELECTED TRADING TIMEFRAME: ${tradingTimeframe}
+The user has explicitly selected "${tradingTimeframe}" as their trading timeframe.
+This OVERRIDES the default timeframe selection logic. ALL recommendations must fit within this timeframe.
+- Options expirations must align with ${tradingTimeframe}
+- Stop losses must be sized for a ${tradingTimeframe} holding period
+- Targets must be achievable within ${tradingTimeframe}`;
+  }
+
+  return prompt;
 }
 
-export function getFinalRecommendationPrompt(): string {
+export function getFinalRecommendationPrompt(tradingTimeframe?: string): string {
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0];
   const twoWeeksOut = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -788,5 +801,101 @@ Your decision process:
 4. **Earnings/Catalysts (5-10%)**: Event-driven factors
 5. **Analyst Ratings (3-5%)**: Wall Street consensus
 
-**Whale data leads the direction, but ALL inputs refine the trade quality and confidence level.**`;
+**Whale data leads the direction, but ALL inputs refine the trade quality and confidence level.**`
+  + (tradingTimeframe ? `
+
+## MANDATORY TIMEFRAME CONSTRAINT
+The user selected "${tradingTimeframe}" as their trading timeframe.
+- The "timeframe" field in your JSON output MUST be "${tradingTimeframe}"
+- Options expirations MUST be within the ${tradingTimeframe} window
+- Stop loss and targets MUST be sized appropriately for ${tradingTimeframe}
+- Do NOT override this with a different timeframe` : '');
+}
+
+export function getTimeframeGuidelines(timeframe: string, analysisType: string): string {
+  if (analysisType === 'stock') {
+    switch (timeframe) {
+      case '1 week':
+        return `GUIDELINES FOR 1-WEEK TRADE:
+- Options expiration: This week or next week (0-7 DTE)
+- Stop loss: 2-3% from entry (tight)
+- Price target: 3-5% move
+- Focus on: Immediate catalysts, momentum, intraday levels
+- Strategy: Weekly options, high-delta plays (0.60-0.80 delta)`;
+      case '2 weeks':
+        return `GUIDELINES FOR 2-WEEK TRADE:
+- Options expiration: 10-17 DTE
+- Stop loss: 3-5% from entry
+- Price target: 5-8% move
+- Focus on: Near-term catalysts, swing levels, earnings proximity
+- Strategy: Bi-weekly options, moderate delta (0.50-0.65)`;
+      case '3 weeks':
+        return `GUIDELINES FOR 3-WEEK TRADE:
+- Options expiration: 17-24 DTE
+- Stop loss: 4-6% from entry
+- Price target: 6-10% move
+- Focus on: Swing trade levels, sector rotation, event catalysts
+- Strategy: Monthly options, spread strategies`;
+      case '1 month':
+        return `GUIDELINES FOR 1-MONTH TRADE:
+- Options expiration: 25-35 DTE
+- Stop loss: 5-8% from entry
+- Price target: 8-15% move
+- Focus on: Monthly chart levels, earnings plays, trend following
+- Strategy: Monthly options, vertical spreads`;
+      case '2 months':
+        return `GUIDELINES FOR 2-MONTH TRADE:
+- Options expiration: 50-65 DTE
+- Stop loss: 8-12% from entry
+- Price target: 12-20% move
+- Focus on: Intermediate trend, multiple catalysts, sector themes
+- Strategy: Calendar spreads, diagonal spreads`;
+      case '3 months':
+        return `GUIDELINES FOR 3-MONTH TRADE:
+- Options expiration: 80-95 DTE
+- Stop loss: 10-15% from entry
+- Price target: 15-30% move
+- Focus on: Quarterly trends, fundamental shifts, multi-catalyst thesis
+- Strategy: LEAPS, diagonal spreads`;
+    }
+  } else if (analysisType === 'forex') {
+    switch (timeframe) {
+      case 'Intraday':
+        return `GUIDELINES FOR INTRADAY TRADE:
+- Analysis timeframe: M5, M15, H1
+- Stop loss: 15-25 pips (majors), 20-40 pips (gold)
+- Take profit: TP1 20-30 pips, TP2 40-60 pips, TP3 60-80 pips
+- Session: Trade during most liquid session for the pair
+- Valid for: Current trading session only`;
+      case '1-3 days':
+        return `GUIDELINES FOR 1-3 DAY TRADE:
+- Analysis timeframe: H1, H4
+- Stop loss: 25-40 pips (majors), 40-70 pips (gold)
+- Take profit: TP1 30-50 pips, TP2 60-100 pips, TP3 100-150 pips
+- Session: Any liquid session, multi-session holds OK
+- Valid for: 1-3 trading days`;
+      case '1 week':
+        return `GUIDELINES FOR 1-WEEK TRADE:
+- Analysis timeframe: H4, D1
+- Stop loss: 40-60 pips (majors), 60-100 pips (gold)
+- Take profit: TP1 50-80 pips, TP2 100-150 pips, TP3 150-200 pips
+- Session: Position trade, hold through sessions
+- Valid for: 5-7 trading days`;
+      case '2 weeks':
+        return `GUIDELINES FOR 2-WEEK TRADE:
+- Analysis timeframe: D1, W1
+- Stop loss: 60-100 pips (majors), 100-200 pips (gold)
+- Take profit: TP1 80-120 pips, TP2 150-250 pips, TP3 250-350 pips
+- Session: Swing trade, macro level analysis
+- Valid for: 10-14 trading days`;
+      case '1 month':
+        return `GUIDELINES FOR 1-MONTH TRADE:
+- Analysis timeframe: D1, W1
+- Stop loss: 100-150 pips (majors), 200-400 pips (gold)
+- Take profit: TP1 150-200 pips, TP2 300-400 pips, TP3 400-600 pips
+- Session: Position trade, fundamental-driven
+- Valid for: 20-30 trading days`;
+    }
+  }
+  return '';
 }

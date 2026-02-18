@@ -1,7 +1,7 @@
 import { chatCompletion } from './openrouter-client';
 import { executeToolCalls } from './executor';
 import { STOCK_TOOLS, FOREX_TOOLS, ALL_TOOLS } from './tools';
-import { getSystemPrompt, getFinalRecommendationPrompt } from './prompts';
+import { getSystemPrompt, getFinalRecommendationPrompt, getTimeframeGuidelines } from './prompts';
 import { performReflection } from './reflection';
 import { ChatMessage, AgentState, OpenRouterTool } from '@/types/ai';
 import { AnalysisType, TradeRecommendation, ToolCall } from '@/types/analysis';
@@ -47,6 +47,7 @@ export async function runAnalysisAgent(
   symbol: string,
   analysisType: AnalysisType,
   additionalContext: string | undefined,
+  tradingTimeframe: string | undefined,
   onProgress?: ProgressCallback
 ): Promise<AgentRunResult> {
   const state: AgentState = {
@@ -61,7 +62,7 @@ export async function runAnalysisAgent(
 
   try {
     // Initialize with system prompt
-    const systemPrompt = getSystemPrompt(analysisType);
+    const systemPrompt = getSystemPrompt(analysisType, tradingTimeframe);
     state.messages.push({
       role: 'system',
       content: systemPrompt,
@@ -77,6 +78,23 @@ export async function runAnalysisAgent(
 Please analyze ${symbol.toUpperCase()} and provide a comprehensive ${analysisType} trading recommendation.
 
 CRITICAL: All expiration dates, earnings dates, and time-sensitive data MUST be in the future relative to today (${formattedDate}). Do NOT use dates from 2023, 2024, or any past date. Options expirations should typically be 1-12 weeks from today.`;
+    if (tradingTimeframe) {
+      userPrompt += `
+
+## TRADING TIMEFRAME (PRIMARY CONSTRAINT)
+The user has selected a trading timeframe of: **${tradingTimeframe}**
+
+This is the PRIMARY constraint for your recommendation. You MUST:
+1. Select options expirations that ALIGN with ${tradingTimeframe}
+2. Set stop loss width appropriate for a ${tradingTimeframe} holding period
+3. Set price targets achievable within ${tradingTimeframe}
+4. The "timeframe" field in your final JSON MUST be "${tradingTimeframe}"
+
+${getTimeframeGuidelines(tradingTimeframe, analysisType)}
+
+DO NOT override this timeframe. The user explicitly chose "${tradingTimeframe}".`;
+    }
+
     if (additionalContext) {
       userPrompt += `
 
@@ -244,7 +262,7 @@ Examples of how to apply user context:
         // Ask for structured output - use higher token limit for forex JSON
         state.messages.push({
           role: 'user',
-          content: `${getFinalRecommendationPrompt()}\n\nIMPORTANT: Respond with ONLY the JSON object. No markdown, no explanation, no code fences. Start your response with { and end with }.\n\nBased on your analysis:\n${finalAnalysis}`,
+          content: `${getFinalRecommendationPrompt(tradingTimeframe)}\n\nIMPORTANT: Respond with ONLY the JSON object. No markdown, no explanation, no code fences. Start your response with { and end with }.\n\nBased on your analysis:\n${finalAnalysis}`,
         });
 
         const finalResponse = await chatCompletion(state.messages, {
