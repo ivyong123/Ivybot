@@ -1,15 +1,15 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { AnalysisType } from '@/types/analysis';
+import { AnalysisType, TradingTimeframe, STOCK_TIMEFRAMES, FOREX_TIMEFRAMES } from '@/types/analysis';
 
 interface TickerInputProps {
   analysisType: AnalysisType;
-  onSubmit: (symbol: string, context?: string) => void;
+  onSubmit: (symbol: string, context?: string, timeframe?: TradingTimeframe) => void;
   isLoading: boolean;
 }
 
@@ -187,6 +187,13 @@ export function TickerInput({ analysisType, onSubmit, isLoading }: TickerInputPr
   const [symbol, setSymbol] = useState('');
   const [context, setContext] = useState('');
   const [isFocused, setIsFocused] = useState(false);
+  const [timeframe, setTimeframe] = useState<TradingTimeframe | ''>('');
+
+  const showTimeframe = analysisType === 'stock' || analysisType === 'forex';
+  const timeframeOptions = analysisType === 'forex' ? FOREX_TIMEFRAMES : STOCK_TIMEFRAMES;
+
+  // Reset timeframe when analysis type changes
+  useEffect(() => { setTimeframe(''); }, [analysisType]);
 
   // Detect symbol type and check for mismatches
   const detectedType = useMemo(() => detectSymbolType(symbol), [symbol]);
@@ -204,7 +211,7 @@ export function TickerInput({ analysisType, onSubmit, isLoading }: TickerInputPr
     }
 
     if (symbol.trim()) {
-      onSubmit(symbol.trim().toUpperCase(), context.trim() || undefined);
+      onSubmit(symbol.trim().toUpperCase(), context.trim() || undefined, timeframe || undefined);
     }
   };
 
@@ -291,6 +298,36 @@ export function TickerInput({ analysisType, onSubmit, isLoading }: TickerInputPr
             focus:glow-primary transition-all resize-none"
         />
       </div>
+
+      {/* Trading Timeframe */}
+      {showTimeframe && (
+        <div className="space-y-3">
+          <Label htmlFor="timeframe" className="text-sm font-medium">
+            Trading Timeframe{' '}
+            <span className="text-muted-foreground font-normal">(optional)</span>
+          </Label>
+          <select
+            id="timeframe"
+            value={timeframe}
+            onChange={(e) => setTimeframe(e.target.value as TradingTimeframe)}
+            disabled={isLoading}
+            className="w-full px-4 py-3 rounded-xl glass-subtle border border-border/50
+              focus:border-primary focus:outline-none transition-all
+              bg-transparent text-foreground text-sm
+              disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <option value="" className="bg-background">Auto (AI determines timeframe)</option>
+            {timeframeOptions.map((tf) => (
+              <option key={tf} value={tf} className="bg-background">{tf}</option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">
+            {analysisType === 'stock'
+              ? 'Controls options expiration, stop loss width, and target sizing'
+              : 'Controls pip targets, stop loss width, and session timing'}
+          </p>
+        </div>
+      )}
 
       {/* Submit Button */}
       <Button
